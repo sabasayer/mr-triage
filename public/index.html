@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>wayfinder</title>
+<style>
+  :root { color-scheme: light dark; }
+  body { font: 14px/1.4 -apple-system, sans-serif; max-width: 960px; margin: 2rem auto; padding: 0 1rem; }
+  h2 { margin-top: 2rem; font-size: 1rem; text-transform: uppercase; letter-spacing: .04em; opacity: .6; }
+  table { width: 100%; border-collapse: collapse; }
+  td, th { text-align: left; padding: .4rem .5rem; border-bottom: 1px solid #8883; vertical-align: middle; }
+  a { color: inherit; }
+  .badge { display: inline-block; padding: .1rem .5rem; border-radius: 1rem; font-size: .75rem; font-weight: 600; }
+  .success { background: #1a7f371a; color: #1a7f37; }
+  .failed { background: #cf222e1a; color: #cf222e; }
+  .running, .pending { background: #9a67001a; color: #9a6700; }
+  .canceled, .skipped { background: #6e76811a; color: #6e7681; }
+  button { font-size: .75rem; padding: .2rem .5rem; cursor: pointer; margin-right: .25rem; }
+  #status { opacity: .5; font-size: .75rem; }
+  .muted { opacity: .6; }
+</style>
+</head>
+<body>
+<h1>wayfinder</h1>
+<div id="status">loading…</div>
+
+<h2>Needs my review</h2>
+<table id="toReview"><tbody></tbody></table>
+
+<h2>My MRs</h2>
+<table id="mine"><tbody></tbody></table>
+
+<script>
+function timeAgo(iso) {
+  const s = Math.round((Date.now() - new Date(iso)) / 1000);
+  if (s < 60) return s + "s ago";
+  if (s < 3600) return Math.round(s / 60) + "m ago";
+  if (s < 86400) return Math.round(s / 3600) + "h ago";
+  return Math.round(s / 86400) + "d ago";
+}
+
+function row(mr) {
+  const pipeline = mr.pipeline
+    ? `<span class="badge ${mr.pipeline.status}">${mr.pipeline.status}</span>`
+    : `<span class="muted">—</span>`;
+  const retryBtn = mr.pipeline && ["failed", "canceled"].includes(mr.pipeline.status)
+    ? `<button data-retry="${mr.project_id}:${mr.pipeline.id}">retry</button>`
+    : "";
+  return `<tr>
+    <td>${mr.project}${mr.draft ? ' <span class="muted">(draft)</span>' : ""}</td>
+    <td><a href="${mr.web_url}" target="_blank">${mr.title}</a></td>
+    <td class="muted">${mr.author}</td>
+    <td>${pipeline}</td>
+    <td class="muted">${mr.merge_status.replace(/_/g, " ")}</td>
+    <td class="muted">${timeAgo(mr.updated_at)}</td>
+    <td>${retryBtn}<button data-copy="${mr.web_url}">copy link</button></td>
+  </tr>`;
+}
+
+function render(tbl, mrs) {
+  document.querySelector(`#${tbl} tbody`).innerHTML =
+    mrs.length ? mrs.map(row).join("") : `<tr><td class="muted" colspan="7">none</td></tr>`;
+}
+
+async function tick() {
+  const res = await fetch("/api/mrs");
+  const data = await res.json();
+  render("toReview", data.toReview);
+  render("mine", data.mine);
+  document.getElementById("status").textContent = data.error
+    ? `error: ${data.error}`
+    : `updated ${timeAgo(data.fetchedAt)}`;
+}
+
+document.body.addEventListener("click", async (e) => {
+  if (e.target.dataset.copy) {
+    navigator.clipboard.writeText(e.target.dataset.copy);
+    e.target.textContent = "copied!";
+    setTimeout(() => (e.target.textContent = "copy link"), 1000);
+  }
+  if (e.target.dataset.retry) {
+    const [projectId, pipelineId] = e.target.dataset.retry.split(":");
+    e.target.textContent = "retrying…";
+    e.target.disabled = true;
+    await fetch(`/api/pipelines/${projectId}/${pipelineId}/retry`, { method: "POST" });
+    tick();
+  }
+});
+
+tick();
+setInterval(tick, 15000);
+</script>
+</body>
+</html>
