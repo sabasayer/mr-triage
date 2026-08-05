@@ -32,6 +32,7 @@ spec):
 ## Decisions so far
 
 - [Stale-approval detection](.scratch/wayfinder-spec/issues/01-stale-approval-detection.md) — GitLab has no field for it; `need_rebase` covers rebase directly, but "needs re-review" must be derived by wayfinder itself from a poll-to-poll `approved` true→false transition (no new API call).
+- [Repo-group ordering and drafts](.scratch/wayfinder-spec/issues/02-repo-group-ordering-and-drafts.md) — sort by urgency then recency; hide empty repo groups entirely; drafts shown normally with a de-emphasizing badge, not hidden.
 
 ## Not yet specified
 
