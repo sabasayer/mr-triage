@@ -29,12 +29,45 @@ async function whoami() {
   return me;
 }
 
+async function myRepos() {
+  try {
+    const raw = await readFile(join(__dirname, "repos.json"), "utf8");
+    return JSON.parse(raw);
+  } catch {
+    return [];
+  }
+}
+
 async function fetchMrList(scopeQuery) {
   return glabApi(`merge_requests?state=opened&per_page=50&${scopeQuery}`);
 }
 
+async function fetchProjectMrList(projectPath) {
+  return glabApi(`projects/${encodeURIComponent(projectPath)}/merge_requests?state=opened&per_page=50`);
+}
+
+// ponytail: in-memory only — an "approved, then push reset it" signal needs no
+// endpoint GitLab exposes, so we remember the last poll's `approved` bit per MR
+// ourselves. Lost on restart; acceptable since wayfinder is meant to stay running.
+const lastApproved = new Map();
+
 async function fetchDetail(mr) {
-  const detail = await glabApi(`projects/${mr.project_id}/merge_requests/${mr.iid}`);
+  const key = `${mr.project_id}!${mr.iid}`;
+  const [detail, approvals] = await Promise.all([
+    glabApi(`projects/${mr.project_id}/merge_requests/${mr.iid}`),
+    glabApi(`projects/${mr.project_id}/merge_requests/${mr.iid}/approvals`),
+  ]);
+
+  const wasApproved = lastApproved.get(key);
+  const needsReReview = wasApproved === true && approvals.approved === false;
+  lastApproved.set(key, approvals.approved);
+
+  const needsRebase = detail.detailed_merge_status === "need_rebase";
+  const pipeline = detail.head_pipeline
+    ? { id: detail.head_pipeline.id, status: detail.head_pipeline.status, web_url: detail.head_pipeline.web_url }
+    : null;
+  const pipelineFailed = pipeline && ["failed", "canceled"].includes(pipeline.status);
+
   return {
     project_id: mr.project_id,
     project: detail.references?.full?.split("!")[0] ?? String(mr.project_id),
@@ -45,42 +78,56 @@ async function fetchDetail(mr) {
     draft: mr.draft,
     updated_at: mr.updated_at,
     merge_status: detail.detailed_merge_status,
-    pipeline: detail.head_pipeline
-      ? { id: detail.head_pipeline.id, status: detail.head_pipeline.status, web_url: detail.head_pipeline.web_url }
-      : null,
+    needs_rebase: needsRebase,
+    needs_re_review: needsReReview,
+    pipeline,
+    urgent: Boolean(pipelineFailed || needsRebase || needsReReview),
   };
 }
 
 async function loadMrs() {
   const user = await whoami();
-  const [authored, reviewing, assigned] = await Promise.all([
+  const repos = await myRepos();
+
+  const [authored, reviewing, ...repoLists] = await Promise.all([
     fetchMrList("scope=created_by_me"),
     fetchMrList(`reviewer_username=${user}`),
-    fetchMrList("scope=assigned_to_me"),
+    ...repos.map(fetchProjectMrList),
   ]);
 
+  const authoredKeys = new Set(authored.map((m) => `${m.project_id}!${m.iid}`));
+  const reviewingKeys = new Set(reviewing.map((m) => `${m.project_id}!${m.iid}`));
+
   const byKey = new Map();
-  for (const mr of [...authored, ...reviewing, ...assigned]) {
+  for (const mr of [...authored, ...reviewing, ...repoLists.flat()]) {
     byKey.set(`${mr.project_id}!${mr.iid}`, mr);
   }
 
   const details = await Promise.all([...byKey.values()].map(fetchDetail));
-  const authoredKeys = new Set(authored.map((m) => `${m.project_id}!${m.iid}`));
-
-  const mine = [];
-  const toReview = [];
   for (const d of details) {
-    (authoredKeys.has(`${d.project_id}!${d.iid}`) ? mine : toReview).push(d);
+    const key = `${d.project_id}!${d.iid}`;
+    d.relationship = authoredKeys.has(key) ? "authored" : reviewingKeys.has(key) ? "reviewing" : "other";
   }
-  const byUpdated = (a, b) => new Date(b.updated_at) - new Date(a.updated_at);
-  return { mine: mine.sort(byUpdated), toReview: toReview.sort(byUpdated) };
+
+  const groups = new Map();
+  for (const d of details) {
+    if (!groups.has(d.project)) groups.set(d.project, []);
+    groups.get(d.project).push(d);
+  }
+
+  const byUrgencyThenRecency = (a, b) =>
+    Number(b.urgent) - Number(a.urgent) || new Date(b.updated_at) - new Date(a.updated_at);
+
+  return [...groups.entries()]
+    .map(([project, mrs]) => ({ project, mrs: mrs.sort(byUrgencyThenRecency) }))
+    .sort((a, b) => Number(b.mrs.some((m) => m.urgent)) - Number(a.mrs.some((m) => m.urgent)) || a.project.localeCompare(b.project));
 }
 
 // ponytail: single shared cache refreshed on a timer, all clients just poll it — no per-client state
-let cache = { mine: [], toReview: [], fetchedAt: null, error: null };
+let cache = { groups: [], fetchedAt: null, error: null };
 async function refresh() {
   try {
-    cache = { ...(await loadMrs()), fetchedAt: new Date().toISOString(), error: null };
+    cache = { groups: await loadMrs(), fetchedAt: new Date().toISOString(), error: null };
   } catch (err) {
     cache = { ...cache, error: err.message, fetchedAt: new Date().toISOString() };
   }
