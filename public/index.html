@@ -24,12 +24,25 @@
   tr.draft-row { opacity: .6; }
   #warnings { background: #cf222e14; color: #cf222e; border: 1px solid #cf222e33; border-radius: 6px; padding: .5rem .75rem; margin-top: .5rem; font-size: .8rem; display: none; }
   #warnings ul { margin: .25rem 0 0; padding-left: 1.2rem; }
+  .bot { background: #6e76811a; color: #6e7681; }
+  #groupBy { margin: .5rem 0 0; font-size: .8rem; }
+  #groupBy button { background: none; border: 1px solid #8886; border-radius: 4px; }
+  #groupBy button.active { background: #8883; font-weight: 600; }
+  details > summary { cursor: pointer; list-style: none; margin: 2rem 0 .25rem; font-size: 1rem; }
+  details > summary::-webkit-details-marker { display: none; }
+  details > summary::before { content: "▾ "; }
+  details:not([open]) > summary::before { content: "▸ "; }
 </style>
 </head>
 <body>
 <h1>wayfinder</h1>
 <div id="status">loading…</div>
 <div id="warnings"></div>
+<div id="groupBy">
+  group by
+  <button data-group="repo" class="active">repo</button>
+  <button data-group="author">author</button>
+</div>
 <div id="groups"></div>
 
 <script>
@@ -49,6 +62,8 @@ function statusBadges(mr) {
   return badges.join("") || `<span class="muted">—</span>`;
 }
 
+const isBot = (username) => /bot|renovate|dependabot/i.test(username);
+
 function row(mr) {
   const retryBtn = mr.pipeline && ["failed", "canceled"].includes(mr.pipeline.status)
     ? `<button data-retry="${mr.project_id}:${mr.pipeline.id}">retry</button>`
@@ -56,31 +71,70 @@ function row(mr) {
   return `<tr class="${mr.draft ? "draft-row" : ""}">
     <td><a href="${mr.web_url}" target="_blank">${mr.title}</a>${mr.draft ? ' <span class="badge draft">draft</span>' : ""}</td>
     <td class="relationship">${mr.relationship}</td>
-    <td class="muted">${mr.author}</td>
+    <td class="muted">${mr.author}${isBot(mr.author) ? ' <span class="badge bot">bot</span>' : ""}</td>
     <td>${statusBadges(mr)}</td>
     <td class="muted">${timeAgo(mr.updated_at)}</td>
     <td>${retryBtn}<button data-copy="${mr.web_url}">copy link</button></td>
   </tr>`;
 }
 
-function group(g) {
-  return `<h2>${g.project}</h2>
-  <table><tbody>${g.mrs.map(row).join("")}</tbody></table>`;
+// ponytail: collapse state lives in a plain Set, keyed by "mode:label" so
+// switching group-by modes doesn't leak collapsed state across them
+const collapsed = new Set();
+
+function group(g, mode) {
+  const key = `${mode}:${g.label}`;
+  return `<details ${collapsed.has(key) ? "" : "open"} data-key="${key}">
+    <summary>${g.label} <span class="muted">(${g.mrs.length})</span></summary>
+    <table><tbody>${g.mrs.map(row).join("")}</tbody></table>
+  </details>`;
+}
+
+function byUrgencyThenLabel(a, b) {
+  return Number(b.mrs.some((m) => m.urgent)) - Number(a.mrs.some((m) => m.urgent)) || a.label.localeCompare(b.label);
+}
+
+function regroupByAuthor(repoGroups) {
+  const byAuthor = new Map();
+  for (const g of repoGroups) {
+    for (const mr of g.mrs) {
+      if (!byAuthor.has(mr.author)) byAuthor.set(mr.author, []);
+      byAuthor.get(mr.author).push(mr);
+    }
+  }
+  const byUrgencyThenRecency = (a, b) =>
+    Number(b.urgent) - Number(a.urgent) || new Date(b.updated_at) - new Date(a.updated_at);
+  return [...byAuthor.entries()]
+    .map(([label, mrs]) => ({ label, mrs: mrs.sort(byUrgencyThenRecency) }))
+    .sort(byUrgencyThenLabel);
+}
+
+let groupMode = "repo";
+let lastData = null;
+
+function render() {
+  if (!lastData) return;
+  const groups = groupMode === "repo"
+    ? lastData.groups.map((g) => ({ label: g.project, mrs: g.mrs })).sort(byUrgencyThenLabel)
+    : regroupByAuthor(lastData.groups);
+
+  document.getElementById("groups").innerHTML =
+    groups.length ? groups.map((g) => group(g, groupMode)).join("") : `<p class="muted">nothing open</p>`;
 }
 
 async function tick() {
   const res = await fetch("/api/mrs");
-  const data = await res.json();
-  document.getElementById("groups").innerHTML =
-    data.groups.length ? data.groups.map(group).join("") : `<p class="muted">nothing open</p>`;
-  document.getElementById("status").textContent = data.error
-    ? `error: ${data.error}`
-    : `updated ${timeAgo(data.fetchedAt)}`;
+  lastData = await res.json();
+  render();
+
+  document.getElementById("status").textContent = lastData.error
+    ? `error: ${lastData.error}`
+    : `updated ${timeAgo(lastData.fetchedAt)}`;
 
   const warnings = document.getElementById("warnings");
-  if (data.warnings?.length) {
+  if (lastData.warnings?.length) {
     warnings.style.display = "block";
-    warnings.innerHTML = `${data.warnings.length} problem(s) fetching data:<ul>${data.warnings.map((w) => `<li>${w}</li>`).join("")}</ul>`;
+    warnings.innerHTML = `${lastData.warnings.length} problem(s) fetching data:<ul>${lastData.warnings.map((w) => `<li>${w}</li>`).join("")}</ul>`;
   } else {
     warnings.style.display = "none";
   }
@@ -99,7 +153,18 @@ document.body.addEventListener("click", async (e) => {
     await fetch(`/api/pipelines/${projectId}/${pipelineId}/retry`, { method: "POST" });
     tick();
   }
+  if (e.target.dataset.group) {
+    groupMode = e.target.dataset.group;
+    document.querySelectorAll("#groupBy button").forEach((b) => b.classList.toggle("active", b === e.target));
+    render();
+  }
 });
+
+document.getElementById("groups").addEventListener("toggle", (e) => {
+  const key = e.target.dataset.key;
+  if (e.target.open) collapsed.delete(key);
+  else collapsed.add(key);
+}, true);
 
 tick();
 setInterval(tick, 15000);
