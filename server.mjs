@@ -51,7 +51,20 @@ async function fetchProjectMrList(projectPath) {
 // ourselves. Lost on restart; acceptable since wayfinder is meant to stay running.
 const lastApproved = new Map();
 
+// ponytail: per-refresh cache — several MRs usually share a project, no need
+// to ask GitLab "is this archived?" once per MR when once per project will do.
+const archivedCache = new Map();
+async function isArchived(projectId) {
+  if (!archivedCache.has(projectId)) {
+    const project = await glabApi(`projects/${projectId}`);
+    archivedCache.set(projectId, Boolean(project.archived));
+  }
+  return archivedCache.get(projectId);
+}
+
 async function fetchDetail(mr) {
+  if (await isArchived(mr.project_id)) return null;
+
   const key = `${mr.project_id}!${mr.iid}`;
   const [detail, approvals] = await Promise.all([
     glabApi(`projects/${mr.project_id}/merge_requests/${mr.iid}`),
@@ -89,6 +102,7 @@ async function fetchDetail(mr) {
 
 async function loadMrs() {
   console.log("[wayfinder] refresh: fetching MR lists…");
+  archivedCache.clear();
   const user = await whoami();
   const repos = await myRepos();
 
@@ -127,7 +141,7 @@ async function loadMrs() {
       detailErrors.map((r) => `${r.mr.references?.full ?? r.mr.web_url}: ${r.error}`),
     );
   }
-  const details = detailResults.filter((r) => r.ok).map((r) => r.d);
+  const details = detailResults.filter((r) => r.ok && r.d !== null).map((r) => r.d);
 
   for (const d of details) {
     const key = `${d.project_id}!${d.iid}`;

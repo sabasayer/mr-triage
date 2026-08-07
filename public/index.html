@@ -210,6 +210,11 @@ svg{display:block}
       <button id="byRepo" aria-pressed="true">Repo</button>
       <button id="byAuthor" aria-pressed="false">Author</button>
     </div>
+    <div class="seg" role="group" aria-label="Sort by">
+      <button id="sortPriority" aria-pressed="true">Priority</button>
+      <button id="sortDate" aria-pressed="false">Date</button>
+      <button id="sortCreator" aria-pressed="false">Creator</button>
+    </div>
     <div class="status" id="status">loading…</div>
   </header>
 
@@ -222,8 +227,10 @@ svg{display:block}
 "use strict";
 
 /* ── state ─────────────────────────────────────────────── */
-var LS_MODE='wf.mode', LS_CLOSED='wf.closed';
+var LS_MODE='wf.mode', LS_CLOSED='wf.closed', LS_SORT='wf.sort';
 var mode = localStorage.getItem(LS_MODE)==='author' ? 'author' : 'repo';
+var SORTS=['priority','date','creator'];
+var sortMode = SORTS.indexOf(localStorage.getItem(LS_SORT))>=0 ? localStorage.getItem(LS_SORT) : 'priority';
 var closed = new Set();
 try{ (JSON.parse(localStorage.getItem(LS_CLOSED))||[]).forEach(function(k){closed.add(k);}); }catch(e){}
 var data=null, fetchedAt=null, fetchError=null, demo=false, tickTimer=null;
@@ -271,6 +278,23 @@ function level(mr){
   return 'ok';
 }
 function short(p){ var i=p.lastIndexOf('/'); return i<0?{pre:'',last:p}:{pre:p.slice(0,i+1),last:p.slice(i+1)}; }
+
+// ponytail: bots always sink to the bottom of their group, whatever the
+// chosen sort — that's the whole point of the toggle. `sortMode` only
+// decides how the non-bot rows (and, within it, the bot rows) are ordered.
+function sortRows(mrs){
+  function cmp(a,b){
+    if(sortMode==='date') return new Date(b.updated_at)-new Date(a.updated_at);
+    if(sortMode==='creator') return (a.author||'').localeCompare(b.author||'') || new Date(b.updated_at)-new Date(a.updated_at);
+    var ux=(level(a)!=='ok')?0:1, uy=(level(b)!=='ok')?0:1;
+    if(ux!==uy) return ux-uy;
+    return new Date(b.updated_at)-new Date(a.updated_at);
+  }
+  var humans=[], bots=[];
+  mrs.forEach(function(m){ (BOT.test(m.author||'')?bots:humans).push(m); });
+  humans.sort(cmp); bots.sort(cmp);
+  return humans.concat(bots);
+}
 function el(tag,cls,txt){ var n=document.createElement(tag); if(cls)n.className=cls; if(txt!=null)n.textContent=txt; return n; }
 function icon(d,extra){
   var s=document.createElementNS('http://www.w3.org/2000/svg','svg');
@@ -294,7 +318,7 @@ function buildGroups(){
   if(!data||!data.groups) return groups;
   if(mode==='repo'){
     data.groups.forEach(function(g){
-      groups.push({key:'repo:'+g.project, label:g.project, kind:'repo', mrs:g.mrs.slice(), bot:false});
+      groups.push({key:'repo:'+g.project, label:g.project, kind:'repo', mrs:sortRows(g.mrs.slice()), bot:false});
     });
   }else{
     var by={};
@@ -305,12 +329,7 @@ function buildGroups(){
       });
     });
     Object.keys(by).forEach(function(a){
-      var mrs=by[a].slice().sort(function(x,y){
-        var ux=(level(x)!=='ok')?0:1, uy=(level(y)!=='ok')?0:1;
-        if(ux!==uy) return ux-uy;
-        return new Date(y.updated_at)-new Date(x.updated_at);
-      });
-      groups.push({key:'author:'+a, label:a, kind:'author', mrs:mrs, bot:BOT.test(a)});
+      groups.push({key:'author:'+a, label:a, kind:'author', mrs:sortRows(by[a].slice()), bot:BOT.test(a)});
     });
     groups.sort(function(a,b){
       if(a.bot!==b.bot) return a.bot?1:-1;
@@ -499,6 +518,21 @@ $('#byRepo').addEventListener('click',function(){ setMode('repo'); });
 $('#byAuthor').addEventListener('click',function(){ setMode('author'); });
 $('#byRepo').setAttribute('aria-pressed', String(mode==='repo'));
 $('#byAuthor').setAttribute('aria-pressed', String(mode==='author'));
+
+/* ── sort toggle ───────────────────────────────────────── */
+function setSort(s){
+  sortMode=s; localStorage.setItem(LS_SORT,s);
+  $('#sortPriority').setAttribute('aria-pressed', String(s==='priority'));
+  $('#sortDate').setAttribute('aria-pressed', String(s==='date'));
+  $('#sortCreator').setAttribute('aria-pressed', String(s==='creator'));
+  render();
+}
+$('#sortPriority').addEventListener('click',function(){ setSort('priority'); });
+$('#sortDate').addEventListener('click',function(){ setSort('date'); });
+$('#sortCreator').addEventListener('click',function(){ setSort('creator'); });
+$('#sortPriority').setAttribute('aria-pressed', String(sortMode==='priority'));
+$('#sortDate').setAttribute('aria-pressed', String(sortMode==='date'));
+$('#sortCreator').setAttribute('aria-pressed', String(sortMode==='creator'));
 
 /* ── clocks ────────────────────────────────────────────── */
 setInterval(function(){
