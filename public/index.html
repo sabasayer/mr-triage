@@ -154,6 +154,8 @@ button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
 }
 .tag.crit{color:var(--crit);background:var(--crit-bg);border-color:var(--crit-line)}
 .tag.warn{color:var(--warn);background:var(--warn-bg);border-color:var(--warn-line)}
+.tag.ok{color:var(--ok);background:rgba(14,158,105,.10);border-color:rgba(14,158,105,.35)}
+.tag.muted{color:var(--text-faint);background:var(--chip);border-color:var(--line)}
 .tag.draft{color:var(--text-faint);background:var(--chip);border-color:var(--line);text-transform:uppercase;letter-spacing:.05em;font-size:9.5px}
 .pipe{flex:none;display:inline-flex;align-items:center;gap:4px;font-size:11px;color:var(--text-faint);white-space:nowrap}
 .pipe .dot{width:7px;height:7px;border-radius:50%;background:var(--text-faint)}
@@ -413,6 +415,8 @@ function rowEl(mr,g){
   else if(ps==='success'){ var po=el('span','pipe ok'); po.title='pipeline passed'; po.appendChild(el('i','dot')); tags.appendChild(po); }
   if(mr.needs_rebase) tags.appendChild(el('span','tag warn','rebase'));
   if(mr.needs_re_review) tags.appendChild(el('span','tag warn','re-review'));
+  else if(mr.approved) tags.appendChild(el('span','tag ok','approved'));
+  else if(mr.approvals_left) tags.appendChild(el('span','tag muted','awaiting approval'));
   main.appendChild(tags);
   r.appendChild(main);
 

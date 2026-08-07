@@ -78,6 +78,8 @@ async function fetchDetail(mr) {
     draft: mr.draft,
     updated_at: mr.updated_at,
     merge_status: detail.detailed_merge_status,
+    approved: approvals.approved,
+    approvals_left: approvals.approvals_left,
     needs_rebase: needsRebase,
     needs_re_review: needsReReview,
     pipeline,
