@@ -118,6 +118,12 @@ button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
 .gname .dim{color:var(--text-faint);font-weight:500;font-size:12.5px}
 .gmeta{margin-left:auto;display:flex;align-items:center;gap:6px;flex:none}
 .count{font-size:11px;color:var(--text-faint);font-weight:600}
+.favBtn{font-size:15px;line-height:1;color:var(--text-faint);padding:0 1px}
+.favBtn:hover{color:var(--warn)}
+.favBtn.on{color:var(--warn)}
+.section-label{font-size:11px;font-weight:750;letter-spacing:.06em;text-transform:uppercase;color:var(--text-faint);margin:4px 2px 6px}
+.group.pinned{border-color:var(--warn-line)}
+#watched:not(:empty){margin-bottom:18px;padding-bottom:10px;border-bottom:1px dashed var(--line-strong)}
 .badge{
   font-size:10.5px;font-weight:700;padding:1px 6px;border-radius:999px;line-height:1.5;
 }
@@ -227,6 +233,7 @@ svg{display:block}
   </header>
 
   <div id="warnings"></div>
+  <div id="watched"></div>
   <main id="list"></main>
 </div>
 
@@ -235,12 +242,19 @@ svg{display:block}
 "use strict";
 
 /* ── state ─────────────────────────────────────────────── */
-var LS_MODE='wf.mode', LS_CLOSED='wf.closed', LS_SORT='wf.sort';
+var LS_MODE='wf.mode', LS_CLOSED='wf.closed', LS_SORT='wf.sort', LS_FAVS='wf.favorites';
 var mode = localStorage.getItem(LS_MODE)==='author' ? 'author' : 'repo';
 var SORTS=['priority','date','creator'];
 var sortMode = SORTS.indexOf(localStorage.getItem(LS_SORT))>=0 ? localStorage.getItem(LS_SORT) : 'priority';
 var closed = new Set();
 try{ (JSON.parse(localStorage.getItem(LS_CLOSED))||[]).forEach(function(k){closed.add(k);}); }catch(e){}
+var favorites = new Set();
+try{ (JSON.parse(localStorage.getItem(LS_FAVS))||[]).forEach(function(k){favorites.add(k);}); }catch(e){}
+function toggleFavorite(project){
+  if(favorites.has(project)) favorites.delete(project); else favorites.add(project);
+  localStorage.setItem(LS_FAVS, JSON.stringify(Array.from(favorites)));
+  render();
+}
 var data=null, fetchedAt=null, fetchError=null, demo=false, tickTimer=null;
 var seenGroups = new Set();   // groups we've already applied default-collapse to
 
@@ -324,16 +338,25 @@ var I={
 };
 
 /* ── grouping ──────────────────────────────────────────── */
+function buildWatched(){
+  if(!data||!data.groups) return [];
+  return data.groups
+    .filter(function(g){ return favorites.has(g.project); })
+    .map(function(g){ return {key:'repo:'+g.project, label:g.project, kind:'repo', short:g.short, mrs:sortRows(g.mrs.slice()), bot:false}; })
+    .sort(function(a,b){ return Number(b.mrs.some(function(m){return level(m)==='crit';})) - Number(a.mrs.some(function(m){return level(m)==='crit';})) || a.label.localeCompare(b.label); });
+}
+
 function buildGroups(){
   var groups=[];
   if(!data||!data.groups) return groups;
   if(mode==='repo'){
-    data.groups.forEach(function(g){
+    data.groups.filter(function(g){ return !favorites.has(g.project); }).forEach(function(g){
       groups.push({key:'repo:'+g.project, label:g.project, kind:'repo', short:g.short, mrs:sortRows(g.mrs.slice()), bot:false});
     });
   }else{
     var by={};
     data.groups.forEach(function(g){
+      if(favorites.has(g.project)) return;
       g.mrs.forEach(function(mr){
         var a=mr.author||'unknown';
         (by[a]=by[a]||[]).push(Object.assign({},mr,{_project:g.project}));
@@ -357,18 +380,25 @@ function buildGroups(){
 function render(){
   renderStatus(); renderWarnings();
 
+  var watched=$('#watched'); watched.textContent='';
+  var watchedGroups=buildWatched();
+  if(watchedGroups.length){
+    watched.appendChild(el('div','section-label','★ Watched'));
+    watchedGroups.forEach(function(g){ watched.appendChild(groupEl(g,{pinned:true})); });
+  }
+
   var list=$('#list'), groups=buildGroups();
   list.textContent='';
 
   var crit=0;
-  groups.forEach(function(g){ g.mrs.forEach(function(m){ if(level(m)==='crit') crit++; }); });
+  (data&&data.groups||[]).forEach(function(g){ g.mrs.forEach(function(m){ if(level(m)==='crit') crit++; }); });
   var alarm=$('#alarm');
   alarm.classList.toggle('on', crit>0);
   $('#alarmText').textContent = crit + (crit===1?' needs attention':' need attention');
 
   if(!groups.length){
     var e=el('div','empty'); e.appendChild(el('b',null,'All clear'));
-    e.appendChild(document.createTextNode(fetchError?'Nothing loaded.':'No open merge requests.'));
+    e.appendChild(document.createTextNode(fetchError?'Nothing loaded.':(watchedGroups.length?'Nothing else open.':'No open merge requests.')));
     list.appendChild(e); return;
   }
 
@@ -382,15 +412,19 @@ function render(){
   });
 }
 
-function groupEl(g){
+function groupEl(g,opts){
+  opts=opts||{};
   var crit=g.mrs.filter(function(m){return level(m)==='crit';}).length;
   var warn=g.mrs.filter(function(m){return level(m)==='warn';}).length;
 
-  var d=el('details','group'); d.open=!closed.has(g.key);
-  d.addEventListener('toggle',function(){
-    if(d.open) closed.delete(g.key); else closed.add(g.key);
-    localStorage.setItem(LS_CLOSED, JSON.stringify(Array.from(closed)));
-  });
+  var d=el('details','group'+(opts.pinned?' pinned':''));
+  d.open = opts.pinned ? true : !closed.has(g.key);
+  if(!opts.pinned){
+    d.addEventListener('toggle',function(){
+      if(d.open) closed.delete(g.key); else closed.add(g.key);
+      localStorage.setItem(LS_CLOSED, JSON.stringify(Array.from(closed)));
+    });
+  }
 
   var s=el('summary');
   var c=icon(I.caret,'1.8'); c.classList.add('caret'); s.appendChild(c);
@@ -417,6 +451,13 @@ function groupEl(g){
   if(crit) meta.appendChild(el('span','badge crit',crit+' failing'));
   else if(warn) meta.appendChild(el('span','badge warn',warn+' to do'));
   meta.appendChild(el('span','count',g.mrs.length));
+  if(g.kind==='repo'){
+    var isFav=favorites.has(g.label);
+    var favBtn=el('button','favBtn'+(isFav?' on':''),isFav?'★':'☆');
+    favBtn.title=isFav?'Unwatch':'Watch this repo';
+    favBtn.addEventListener('click',function(e){ e.preventDefault(); e.stopPropagation(); toggleFavorite(g.label); });
+    meta.appendChild(favBtn);
+  }
   s.appendChild(meta);
   d.appendChild(s);
 
