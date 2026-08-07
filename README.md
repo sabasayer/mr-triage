@@ -18,3 +18,8 @@ npm start                          # http://localhost:4931
 
 Requires `glab` installed and authenticated. `repos.json` is gitignored — it's
 personal, edit it directly.
+
+Entries can be a plain project path, or `{ "path": "...", "short": "XX" }` to
+override the group's avatar letter(s) — handy when several repos share a
+prefix (e.g. everything starting with `xds-`) and the auto-derived initial
+collides.

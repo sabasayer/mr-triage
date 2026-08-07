@@ -29,10 +29,13 @@ async function whoami() {
   return me;
 }
 
+// ponytail: entries can be a plain path string, or {path, short} when the
+// auto-derived avatar letter collides (e.g. everything starting with "xds-")
 async function myRepos() {
   try {
     const raw = await readFile(join(__dirname, "repos.json"), "utf8");
-    return JSON.parse(raw);
+    const entries = JSON.parse(raw);
+    return entries.map((e) => (typeof e === "string" ? { path: e, short: null } : { path: e.path, short: e.short ?? null }));
   } catch {
     return [];
   }
@@ -106,10 +109,12 @@ async function loadMrs() {
   const user = await whoami();
   const repos = await myRepos();
 
+  const shortByPath = new Map(repos.filter((r) => r.short).map((r) => [r.path, r.short]));
+
   const [authored, reviewing, ...repoResults] = await Promise.all([
     fetchMrList("scope=created_by_me"),
     fetchMrList(`reviewer_username=${user}`),
-    ...repos.map((path) => fetchProjectMrList(path).then(
+    ...repos.map(({ path }) => fetchProjectMrList(path).then(
       (mrs) => ({ ok: true, mrs }),
       (err) => ({ ok: false, path, error: err.message }),
     )),
@@ -158,7 +163,7 @@ async function loadMrs() {
     Number(b.urgent) - Number(a.urgent) || new Date(b.updated_at) - new Date(a.updated_at);
 
   const sortedGroups = [...groups.entries()]
-    .map(([project, mrs]) => ({ project, mrs: mrs.sort(byUrgencyThenRecency) }))
+    .map(([project, mrs]) => ({ project, short: shortByPath.get(project) ?? null, mrs: mrs.sort(byUrgencyThenRecency) }))
     .sort((a, b) => Number(b.mrs.some((m) => m.urgent)) - Number(a.mrs.some((m) => m.urgent)) || a.project.localeCompare(b.project));
 
   console.log(`[wayfinder] refresh done: ${sortedGroups.length} group(s), ${details.length} MR(s) shown`);

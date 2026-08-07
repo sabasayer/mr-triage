@@ -1,4 +1,6 @@
 [
   "founda/application/xds-widgets",
-  "founda/application/xds-viewer-ui"
+  { "path": "founda/application/xds-viewer-ui", "short": "VW" },
+  { "path": "founda/application/xds-prefetch-ui", "short": "PF" },
+  { "path": "founda/application/xds-nuxt-base", "short": "NX" }
 ]

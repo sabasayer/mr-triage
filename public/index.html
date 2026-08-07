@@ -329,7 +329,7 @@ function buildGroups(){
   if(!data||!data.groups) return groups;
   if(mode==='repo'){
     data.groups.forEach(function(g){
-      groups.push({key:'repo:'+g.project, label:g.project, kind:'repo', mrs:sortRows(g.mrs.slice()), bot:false});
+      groups.push({key:'repo:'+g.project, label:g.project, kind:'repo', short:g.short, mrs:sortRows(g.mrs.slice()), bot:false});
     });
   }else{
     var by={};
@@ -396,7 +396,9 @@ function groupEl(g){
   var c=icon(I.caret,'1.8'); c.classList.add('caret'); s.appendChild(c);
 
   var lastSegment = g.kind==='repo' ? short(g.label).last : g.label;
-  var av=el('span','gavatar',(lastSegment[0]||'?').toUpperCase());
+  var avatarText = (g.short || lastSegment[0] || '?').toUpperCase();
+  var av=el('span','gavatar',avatarText);
+  if(avatarText.length>1){ av.style.width='auto'; av.style.padding='0 5px'; }
   av.style.background='hsl('+hueOf(g.label)+'deg 52% 42%)';
   s.appendChild(av);
 
