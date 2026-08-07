@@ -22,11 +22,14 @@
   #status { opacity: .5; font-size: .75rem; }
   .muted { opacity: .6; }
   tr.draft-row { opacity: .6; }
+  #warnings { background: #cf222e14; color: #cf222e; border: 1px solid #cf222e33; border-radius: 6px; padding: .5rem .75rem; margin-top: .5rem; font-size: .8rem; display: none; }
+  #warnings ul { margin: .25rem 0 0; padding-left: 1.2rem; }
 </style>
 </head>
 <body>
 <h1>wayfinder</h1>
 <div id="status">loading…</div>
+<div id="warnings"></div>
 <div id="groups"></div>
 
 <script>
@@ -73,6 +76,14 @@ async function tick() {
   document.getElementById("status").textContent = data.error
     ? `error: ${data.error}`
     : `updated ${timeAgo(data.fetchedAt)}`;
+
+  const warnings = document.getElementById("warnings");
+  if (data.warnings?.length) {
+    warnings.style.display = "block";
+    warnings.innerHTML = `${data.warnings.length} problem(s) fetching data:<ul>${data.warnings.map((w) => `<li>${w}</li>`).join("")}</ul>`;
+  } else {
+    warnings.style.display = "none";
+  }
 }
 
 document.body.addEventListener("click", async (e) => {

@@ -86,14 +86,22 @@ async function fetchDetail(mr) {
 }
 
 async function loadMrs() {
+  console.log("[wayfinder] refresh: fetching MR lists…");
   const user = await whoami();
   const repos = await myRepos();
 
-  const [authored, reviewing, ...repoLists] = await Promise.all([
+  const [authored, reviewing, ...repoResults] = await Promise.all([
     fetchMrList("scope=created_by_me"),
     fetchMrList(`reviewer_username=${user}`),
-    ...repos.map(fetchProjectMrList),
+    ...repos.map((path) => fetchProjectMrList(path).then(
+      (mrs) => ({ ok: true, mrs }),
+      (err) => ({ ok: false, path, error: err.message }),
+    )),
   ]);
+
+  const repoErrors = repoResults.filter((r) => !r.ok).map((r) => `${r.path}: ${r.error.trim()}`);
+  const repoLists = repoResults.filter((r) => r.ok).map((r) => r.mrs);
+  if (repoErrors.length) console.error(`[wayfinder] ${repoErrors.length} repos.json entr(ies) failed:`, repoErrors);
 
   const authoredKeys = new Set(authored.map((m) => `${m.project_id}!${m.iid}`));
   const reviewingKeys = new Set(reviewing.map((m) => `${m.project_id}!${m.iid}`));
@@ -102,8 +110,23 @@ async function loadMrs() {
   for (const mr of [...authored, ...reviewing, ...repoLists.flat()]) {
     byKey.set(`${mr.project_id}!${mr.iid}`, mr);
   }
+  console.log(`[wayfinder] refresh: ${byKey.size} MR(s) across ${repos.length} configured repo(s), fetching detail…`);
 
-  const details = await Promise.all([...byKey.values()].map(fetchDetail));
+  const detailResults = await Promise.all(
+    [...byKey.values()].map((mr) => fetchDetail(mr).then(
+      (d) => ({ ok: true, d }),
+      (err) => ({ ok: false, mr, error: err.message }),
+    )),
+  );
+  const detailErrors = detailResults.filter((r) => !r.ok);
+  if (detailErrors.length) {
+    console.error(
+      `[wayfinder] ${detailErrors.length} MR detail fetch(es) failed:`,
+      detailErrors.map((r) => `${r.mr.references?.full ?? r.mr.web_url}: ${r.error}`),
+    );
+  }
+  const details = detailResults.filter((r) => r.ok).map((r) => r.d);
+
   for (const d of details) {
     const key = `${d.project_id}!${d.iid}`;
     d.relationship = authoredKeys.has(key) ? "authored" : reviewingKeys.has(key) ? "reviewing" : "other";
@@ -118,17 +141,22 @@ async function loadMrs() {
   const byUrgencyThenRecency = (a, b) =>
     Number(b.urgent) - Number(a.urgent) || new Date(b.updated_at) - new Date(a.updated_at);
 
-  return [...groups.entries()]
+  const sortedGroups = [...groups.entries()]
     .map(([project, mrs]) => ({ project, mrs: mrs.sort(byUrgencyThenRecency) }))
     .sort((a, b) => Number(b.mrs.some((m) => m.urgent)) - Number(a.mrs.some((m) => m.urgent)) || a.project.localeCompare(b.project));
+
+  console.log(`[wayfinder] refresh done: ${sortedGroups.length} group(s), ${details.length} MR(s) shown`);
+  return { groups: sortedGroups, warnings: [...repoErrors, ...detailErrors.map((r) => `${r.mr.web_url}: ${r.error}`)] };
 }
 
 // ponytail: single shared cache refreshed on a timer, all clients just poll it — no per-client state
-let cache = { groups: [], fetchedAt: null, error: null };
+let cache = { groups: [], warnings: [], fetchedAt: null, error: null };
 async function refresh() {
   try {
-    cache = { groups: await loadMrs(), fetchedAt: new Date().toISOString(), error: null };
+    const { groups, warnings } = await loadMrs();
+    cache = { groups, warnings, fetchedAt: new Date().toISOString(), error: null };
   } catch (err) {
+    console.error("[wayfinder] refresh failed:", err);
     cache = { ...cache, error: err.message, fetchedAt: new Date().toISOString() };
   }
 }
