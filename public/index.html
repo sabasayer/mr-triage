@@ -95,19 +95,27 @@ button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
 
 /* ── groups ────────────────────────────────────────────── */
 .group{
-  background:var(--panel);border:1px solid var(--line);border-radius:9px;
-  margin-bottom:8px;box-shadow:var(--shadow);overflow:hidden;
+  background:var(--panel);border:1px solid var(--line-strong);border-radius:10px;
+  margin-bottom:14px;box-shadow:var(--shadow);overflow:hidden;
 }
 .group>summary{
-  list-style:none;cursor:pointer;padding:7px 11px;
-  display:flex;align-items:center;gap:8px;user-select:none;
+  list-style:none;cursor:pointer;padding:11px 13px;
+  background:var(--panel-2);border-bottom:1px solid var(--line-strong);
+  display:flex;align-items:center;gap:9px;user-select:none;
 }
+.group[open]>summary{border-bottom:1px solid var(--line-strong)}
+.group:not([open])>summary{border-bottom:0}
 .group>summary::-webkit-details-marker{display:none}
 .group>summary:hover{background:var(--hover)}
 .caret{flex:none;color:var(--text-faint);transition:transform .12s ease;transform:rotate(-90deg)}
 .group[open] .caret{transform:rotate(0)}
-.gname{font-weight:650;font-size:12.5px;letter-spacing:-.01em;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.gname .dim{color:var(--text-faint);font-weight:500}
+.gavatar{
+  flex:none;width:22px;height:22px;border-radius:6px;color:#fff;
+  display:flex;align-items:center;justify-content:center;
+  font-size:11px;font-weight:750;letter-spacing:0;
+}
+.gname{font-weight:750;font-size:14.5px;letter-spacing:-.01em;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.gname .dim{color:var(--text-faint);font-weight:500;font-size:12.5px}
 .gmeta{margin-left:auto;display:flex;align-items:center;gap:6px;flex:none}
 .count{font-size:11px;color:var(--text-faint);font-weight:600}
 .badge{
@@ -128,8 +136,8 @@ button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
 }
 .rows .row:last-child{border-bottom:0}
 .row:hover{background:var(--hover)}
-.row.crit{border-left-color:var(--crit);background:var(--crit-bg)}
-.row.crit:hover{background:color-mix(in srgb,var(--crit-bg) 70%,var(--hover))}
+.row.crit{border-left-color:var(--crit);background:color-mix(in srgb,var(--crit-bg) 45%,transparent)}
+.row.crit:hover{background:color-mix(in srgb,var(--crit-bg) 65%,var(--hover))}
 .row.warn{border-left-color:var(--warn-line)}
 .row.quiet{opacity:.62}
 .row.quiet:hover{opacity:1}
@@ -278,6 +286,9 @@ function level(mr){
   return 'ok';
 }
 function short(p){ var i=p.lastIndexOf('/'); return i<0?{pre:'',last:p}:{pre:p.slice(0,i+1),last:p.slice(i+1)}; }
+// ponytail: deterministic color per group label, so the same repo/author
+// always gets the same avatar hue across renders/reloads — no config, no lookup table
+function hueOf(s){ var h=0; for(var i=0;i<s.length;i++) h=(h*31+s.charCodeAt(i))|0; return Math.abs(h)%360; }
 
 // ponytail: bots always sink to the bottom of their group, whatever the
 // chosen sort — that's the whole point of the toggle. `sortMode` only
@@ -383,6 +394,11 @@ function groupEl(g){
 
   var s=el('summary');
   var c=icon(I.caret,'1.8'); c.classList.add('caret'); s.appendChild(c);
+
+  var lastSegment = g.kind==='repo' ? short(g.label).last : g.label;
+  var av=el('span','gavatar',(lastSegment[0]||'?').toUpperCase());
+  av.style.background='hsl('+hueOf(g.label)+'deg 52% 42%)';
+  s.appendChild(av);
 
   var name=el('span','gname');
   if(g.kind==='repo'){
