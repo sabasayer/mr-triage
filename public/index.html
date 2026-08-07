@@ -188,14 +188,17 @@ button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
 }
 .when{flex:none;width:34px;text-align:right;font-size:11.5px;color:var(--text-faint)}
 
-.acts{flex:none;display:flex;align-items:center;gap:2px;width:52px;justify-content:flex-end}
+.acts{flex:none;display:flex;align-items:center;gap:2px;width:76px;justify-content:flex-end}
 .acts button{
   width:24px;height:24px;border-radius:5px;display:grid;place-items:center;
   color:var(--text-faint);opacity:0;transition:opacity .1s;
 }
 .acts button.copy{opacity:.38}
+.acts button.fav{font-size:14px;opacity:.38}
+.acts button.fav.on{opacity:1;color:var(--warn)}
 .row:hover .acts button,.acts button:focus-visible,.acts button.busy,.acts button.done{opacity:1}
 .acts button:hover{background:var(--chip);color:var(--text)}
+.acts button.fav:hover{color:var(--warn)}
 .acts button.retry{color:var(--crit);opacity:.85}
 .acts button.retry:hover{background:var(--crit-bg);color:var(--crit);opacity:1}
 .acts button.done{color:var(--ok)}
@@ -253,6 +256,15 @@ try{ (JSON.parse(localStorage.getItem(LS_FAVS))||[]).forEach(function(k){favorit
 function toggleFavorite(project){
   if(favorites.has(project)) favorites.delete(project); else favorites.add(project);
   localStorage.setItem(LS_FAVS, JSON.stringify(Array.from(favorites)));
+  render();
+}
+
+var LS_FAV_MRS='wf.favMrs';
+var favMrs = new Set();
+try{ (JSON.parse(localStorage.getItem(LS_FAV_MRS))||[]).forEach(function(k){favMrs.add(k);}); }catch(e){}
+function toggleFavoriteMr(url){
+  if(favMrs.has(url)) favMrs.delete(url); else favMrs.add(url);
+  localStorage.setItem(LS_FAV_MRS, JSON.stringify(Array.from(favMrs)));
   render();
 }
 var data=null, fetchedAt=null, fetchError=null, demo=false, tickTimer=null;
@@ -338,6 +350,17 @@ var I={
 };
 
 /* ── grouping ──────────────────────────────────────────── */
+function buildWatchedMrs(){
+  if(!data||!data.groups) return [];
+  var mrs=[];
+  data.groups.forEach(function(g){
+    g.mrs.forEach(function(mr){
+      if(favMrs.has(mr.web_url)) mrs.push(Object.assign({},mr,{_project:g.project}));
+    });
+  });
+  return sortRows(mrs);
+}
+
 function buildWatched(){
   if(!data||!data.groups) return [];
   return data.groups
@@ -381,9 +404,14 @@ function render(){
   renderStatus(); renderWarnings();
 
   var watched=$('#watched'); watched.textContent='';
+  var watchedMrs=buildWatchedMrs();
+  if(watchedMrs.length){
+    watched.appendChild(el('div','section-label','★ Followed MRs'));
+    watched.appendChild(groupEl({key:'pinned-mrs',label:'Followed MRs',kind:'author',short:'MR',bot:false,mrs:watchedMrs},{pinned:true}));
+  }
   var watchedGroups=buildWatched();
   if(watchedGroups.length){
-    watched.appendChild(el('div','section-label','★ Watched'));
+    watched.appendChild(el('div','section-label','★ Watched repos'));
     watchedGroups.forEach(function(g){ watched.appendChild(groupEl(g,{pinned:true})); });
   }
 
@@ -398,7 +426,7 @@ function render(){
 
   if(!groups.length){
     var e=el('div','empty'); e.appendChild(el('b',null,'All clear'));
-    e.appendChild(document.createTextNode(fetchError?'Nothing loaded.':(watchedGroups.length?'Nothing else open.':'No open merge requests.')));
+    e.appendChild(document.createTextNode(fetchError?'Nothing loaded.':((watchedGroups.length||watchedMrs.length)?'Nothing else open.':'No open merge requests.')));
     list.appendChild(e); return;
   }
 
@@ -508,6 +536,11 @@ function rowEl(mr,g){
   r.appendChild(when);
 
   var acts=el('div','acts');
+  var isFavMr=favMrs.has(mr.web_url);
+  var fb=el('button','fav'+(isFavMr?' on':''), isFavMr?'★':'☆');
+  fb.title=isFavMr?'Unfollow':'Follow this MR';
+  fb.addEventListener('click',function(){ toggleFavoriteMr(mr.web_url); });
+  acts.appendChild(fb);
   if(broken(mr) && mr.pipeline){
     var rb=el('button','retry'); rb.title='Retry pipeline'; rb.setAttribute('aria-label','Retry pipeline');
     rb.appendChild(icon(I.retry));
