@@ -1,4 +1,4 @@
-# Wayfinder v1 — Spec
+# MR Triage v1 — Spec
 
 A personal, local web app that replaces manually checking GitLab's MR page.
 It surfaces every MR relevant to Salih, grouped by repo, with live-ish
@@ -44,7 +44,7 @@ Grouped **by repo** (not by relationship). Within a repo group:
 - **Needs rebase** — `detailed_merge_status === 'need_rebase'`, direct from
   the GitLab API.
 - **Needs re-review** — GitLab exposes no field for "was approved, a push
-  invalidated it." Wayfinder derives it itself: keep the previous poll's
+  invalidated it." MR Triage derives it itself: keep the previous poll's
   `approved` boolean per MR (from `GET
   projects/:id/merge_requests/:iid/approvals`, already fetched for the
   approval badge) and flag a true→false transition between polls. No extra
@@ -72,4 +72,6 @@ Exactly two, both already proven in the v0.1 prototype:
 
 ---
 
-Planning history for this spec: [`.scratch/wayfinder-spec/`](.scratch/wayfinder-spec/map.md).
+Planning history for this spec: [`.scratch/wayfinder-spec/`](.scratch/wayfinder-spec/map.md)
+(named for the `/wayfinder` planning skill used to build it, from before the
+app itself was renamed from "wayfinder" to MR Triage).

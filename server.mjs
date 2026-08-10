@@ -51,7 +51,7 @@ async function fetchProjectMrList(projectPath) {
 
 // ponytail: in-memory only — an "approved, then push reset it" signal needs no
 // endpoint GitLab exposes, so we remember the last poll's `approved` bit per MR
-// ourselves. Lost on restart; acceptable since wayfinder is meant to stay running.
+// ourselves. Lost on restart; acceptable since the app is meant to stay running.
 const lastApproved = new Map();
 
 // ponytail: per-refresh cache — several MRs usually share a project, no need
@@ -104,7 +104,7 @@ async function fetchDetail(mr) {
 }
 
 async function loadMrs() {
-  console.log("[wayfinder] refresh: fetching MR lists…");
+  console.log("[mr-triage] refresh: fetching MR lists…");
   archivedCache.clear();
   const user = await whoami();
   const repos = await myRepos();
@@ -122,7 +122,7 @@ async function loadMrs() {
 
   const repoErrors = repoResults.filter((r) => !r.ok).map((r) => `${r.path}: ${r.error.trim()}`);
   const repoLists = repoResults.filter((r) => r.ok).map((r) => r.mrs);
-  if (repoErrors.length) console.error(`[wayfinder] ${repoErrors.length} repos.json entr(ies) failed:`, repoErrors);
+  if (repoErrors.length) console.error(`[mr-triage] ${repoErrors.length} repos.json entr(ies) failed:`, repoErrors);
 
   const authoredKeys = new Set(authored.map((m) => `${m.project_id}!${m.iid}`));
   const reviewingKeys = new Set(reviewing.map((m) => `${m.project_id}!${m.iid}`));
@@ -131,7 +131,7 @@ async function loadMrs() {
   for (const mr of [...authored, ...reviewing, ...repoLists.flat()]) {
     byKey.set(`${mr.project_id}!${mr.iid}`, mr);
   }
-  console.log(`[wayfinder] refresh: ${byKey.size} MR(s) across ${repos.length} configured repo(s), fetching detail…`);
+  console.log(`[mr-triage] refresh: ${byKey.size} MR(s) across ${repos.length} configured repo(s), fetching detail…`);
 
   const detailResults = await Promise.all(
     [...byKey.values()].map((mr) => fetchDetail(mr).then(
@@ -142,7 +142,7 @@ async function loadMrs() {
   const detailErrors = detailResults.filter((r) => !r.ok);
   if (detailErrors.length) {
     console.error(
-      `[wayfinder] ${detailErrors.length} MR detail fetch(es) failed:`,
+      `[mr-triage] ${detailErrors.length} MR detail fetch(es) failed:`,
       detailErrors.map((r) => `${r.mr.references?.full ?? r.mr.web_url}: ${r.error}`),
     );
   }
@@ -166,7 +166,7 @@ async function loadMrs() {
     .map(([project, mrs]) => ({ project, short: shortByPath.get(project) ?? null, mrs: mrs.sort(byUrgencyThenRecency) }))
     .sort((a, b) => Number(b.mrs.some((m) => m.urgent)) - Number(a.mrs.some((m) => m.urgent)) || a.project.localeCompare(b.project));
 
-  console.log(`[wayfinder] refresh done: ${sortedGroups.length} group(s), ${details.length} MR(s) shown`);
+  console.log(`[mr-triage] refresh done: ${sortedGroups.length} group(s), ${details.length} MR(s) shown`);
   return { groups: sortedGroups, warnings: [...repoErrors, ...detailErrors.map((r) => `${r.mr.web_url}: ${r.error}`)] };
 }
 
@@ -177,7 +177,7 @@ async function refresh() {
     const { groups, warnings } = await loadMrs();
     cache = { groups, warnings, fetchedAt: new Date().toISOString(), error: null };
   } catch (err) {
-    console.error("[wayfinder] refresh failed:", err);
+    console.error("[mr-triage] refresh failed:", err);
     cache = { ...cache, error: err.message, fetchedAt: new Date().toISOString() };
   }
 }
@@ -221,4 +221,4 @@ const server = createServer(async (req, res) => {
 
 refresh();
 setInterval(refresh, POLL_MS);
-server.listen(PORT, () => console.log(`wayfinder → http://localhost:${PORT}`));
+server.listen(PORT, () => console.log(`mr-triage → http://localhost:${PORT}`));
