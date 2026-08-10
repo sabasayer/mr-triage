@@ -84,6 +84,17 @@ button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
 .bell{padding:3px 9px;border-radius:7px;border:1px solid var(--line);background:var(--chip);font-size:13px;color:var(--text-dim);line-height:1.4;opacity:.55}
 .bell[aria-pressed="true"]{background:var(--accent-soft);color:var(--accent);border-color:var(--accent);opacity:1}
 .bell:disabled{opacity:.3;cursor:not-allowed}
+.notify-wrap{position:relative;display:flex;align-items:center;gap:4px}
+.gear{padding:3px 7px;border-radius:7px;border:1px solid var(--line);background:var(--chip);font-size:12px;color:var(--text-dim);opacity:.55}
+.gear:hover,.gear[aria-expanded="true"]{opacity:1}
+.notify-panel{
+  position:absolute;top:calc(100% + 6px);right:0;z-index:30;min-width:200px;
+  background:var(--panel);border:1px solid var(--line-strong);border-radius:9px;
+  box-shadow:0 6px 20px rgba(0,0,0,.18);padding:8px 10px;
+}
+.notify-panel h4{margin:0 0 6px;font-size:10.5px;font-weight:750;letter-spacing:.05em;text-transform:uppercase;color:var(--text-faint)}
+.notify-panel label{display:flex;align-items:center;gap:7px;font-size:12.5px;color:var(--text);padding:3px 0;cursor:pointer}
+.notify-panel input{margin:0}
 .status{font-size:11.5px;color:var(--text-faint);white-space:nowrap;display:flex;align-items:center;gap:6px}
 .ring{
   --pct:0; flex:none;width:11px;height:11px;border-radius:50%;
@@ -244,7 +255,11 @@ svg{display:block}
       <button id="sortDate" aria-pressed="false">Date</button>
       <button id="sortCreator" aria-pressed="false">Creator</button>
     </div>
-    <button id="notifyBtn" class="bell" aria-pressed="false" title="Click to enable notifications">🔔</button>
+    <div class="notify-wrap">
+      <button id="notifyBtn" class="bell" aria-pressed="false" title="Click to enable notifications">🔔</button>
+      <button id="notifySettingsBtn" class="gear" title="Notification settings" aria-expanded="false">⚙</button>
+      <div id="notifyPanel" class="notify-panel" hidden></div>
+    </div>
     <div class="status" id="status">loading…</div>
   </header>
 
@@ -332,6 +347,28 @@ var notifyEnabled = localStorage.getItem(LS_NOTIFY)==='1' && ('Notification' in 
 var prevMrState = new Map();   // web_url -> {pipeline, approved, merge_status}
 var primed = false;            // skip notifying on the very first load (no "transition" yet)
 
+// ponytail: "new MR opened" fires whenever an MR is first seen — that also
+// happens if it just entered scope (added to repos.json, recovered from a
+// transient fetch error), not only on genuine creation. "merged or closed"
+// can't be told apart without an extra API call once an MR leaves the
+// state=opened feed, so we guess from its last known merge_status. Both are
+// off by default for that reason; the rest are precise, so on by default.
+var NOTIFY_TYPES=[
+  {key:'pipelineFailed', label:'Pipeline failed', def:true},
+  {key:'approved', label:'MR approved', def:true},
+  {key:'mergeable', label:'Ready to merge', def:true},
+  {key:'opened', label:'New MR opened', def:false},
+  {key:'closedOrMerged', label:'MR merged or closed', def:false}
+];
+var LS_NOTIFY_TYPES='wf.notifyTypes';
+var notifyTypes=(function(){
+  var stored={}; try{ stored=JSON.parse(localStorage.getItem(LS_NOTIFY_TYPES))||{}; }catch(e){}
+  var out={};
+  NOTIFY_TYPES.forEach(function(t){ out[t.key] = (t.key in stored) ? !!stored[t.key] : t.def; });
+  return out;
+})();
+function saveNotifyTypes(){ localStorage.setItem(LS_NOTIFY_TYPES, JSON.stringify(notifyTypes)); }
+
 function notify(title,body,url){
   if(!notifyEnabled || !('Notification' in window) || Notification.permission!=='granted') return;
   var n=new Notification(title,{body:body,tag:url});
@@ -345,15 +382,28 @@ function checkTransitions(groups){
       seen.add(mr.web_url);
       var prev=prevMrState.get(mr.web_url);
       var ps=pstat(mr);
-      if(primed && prev){
-        if(ps==='failed' && prev.pipeline!=='failed') notify('Pipeline failed', short(g.project).last+' · '+mr.title, mr.web_url);
-        if(mr.approved && !prev.approved) notify('MR approved', short(g.project).last+' · '+mr.title, mr.web_url);
-        if(mr.merge_status==='mergeable' && prev.merge_status!=='mergeable') notify('Ready to merge', short(g.project).last+' · '+mr.title, mr.web_url);
+      var label=short(g.project).last+' · '+mr.title;
+      if(primed){
+        if(!prev){
+          if(notifyTypes.opened) notify('New MR opened', label, mr.web_url);
+        }else{
+          if(notifyTypes.pipelineFailed && ps==='failed' && prev.pipeline!=='failed') notify('Pipeline failed', label, mr.web_url);
+          if(notifyTypes.approved && mr.approved && !prev.approved) notify('MR approved', label, mr.web_url);
+          if(notifyTypes.mergeable && mr.merge_status==='mergeable' && prev.merge_status!=='mergeable') notify('Ready to merge', label, mr.web_url);
+        }
       }
-      prevMrState.set(mr.web_url,{pipeline:ps,approved:mr.approved,merge_status:mr.merge_status});
+      prevMrState.set(mr.web_url,{pipeline:ps,approved:mr.approved,merge_status:mr.merge_status,project:g.project,title:mr.title});
     });
   });
-  Array.from(prevMrState.keys()).forEach(function(k){ if(!seen.has(k)) prevMrState.delete(k); });
+  Array.from(prevMrState.entries()).forEach(function(entry){
+    var k=entry[0], v=entry[1];
+    if(seen.has(k)) return;
+    if(primed && notifyTypes.closedOrMerged){
+      var label=short(v.project).last+' · '+v.title;
+      notify(v.merge_status==='mergeable' ? 'MR merged' : 'MR closed', label, k);
+    }
+    prevMrState.delete(k);
+  });
   primed=true;
 }
 
@@ -362,7 +412,7 @@ function updateNotifyBtn(){
   if(!('Notification' in window)){ b.disabled=true; b.title='Notifications not supported by this browser'; return; }
   if(Notification.permission==='denied'){ b.disabled=true; b.setAttribute('aria-pressed','false'); b.title='Blocked — re-enable in browser site settings'; return; }
   b.setAttribute('aria-pressed', String(notifyEnabled));
-  b.title = notifyEnabled ? 'Notifications on for pipeline failures, approvals, ready-to-merge — click to turn off' : 'Click to enable notifications';
+  b.title = notifyEnabled ? 'Notifications on — click to turn off' : 'Click to enable notifications';
 }
 $('#notifyBtn').addEventListener('click',function(){
   if(!('Notification' in window)) return;
@@ -378,6 +428,32 @@ $('#notifyBtn').addEventListener('click',function(){
   }
 });
 updateNotifyBtn();
+
+/* ── notification settings panel ──────────────────────── */
+(function(){
+  var panel=$('#notifyPanel');
+  var h=el('h4',null,'Notify me when');
+  panel.appendChild(h);
+  NOTIFY_TYPES.forEach(function(t){
+    var label=el('label');
+    var cb=document.createElement('input'); cb.type='checkbox'; cb.checked=notifyTypes[t.key];
+    cb.addEventListener('change',function(){ notifyTypes[t.key]=cb.checked; saveNotifyTypes(); });
+    label.appendChild(cb);
+    label.appendChild(document.createTextNode(t.label));
+    panel.appendChild(label);
+  });
+  var gear=$('#notifySettingsBtn');
+  function closePanel(){ panel.hidden=true; gear.setAttribute('aria-expanded','false'); }
+  gear.addEventListener('click',function(e){
+    e.stopPropagation();
+    var open=panel.hidden;
+    panel.hidden=!open;
+    gear.setAttribute('aria-expanded', String(open));
+  });
+  document.addEventListener('click',function(e){
+    if(!panel.hidden && !panel.contains(e.target) && e.target!==gear) closePanel();
+  });
+})();
 
 /* ── helpers ───────────────────────────────────────────── */
 function ago(iso){
