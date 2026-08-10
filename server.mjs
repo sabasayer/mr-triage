@@ -8,13 +8,31 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const PORT = process.env.PORT || 4931;
 const POLL_MS = 20_000;
 
-function glab(args) {
+function glabOnce(args) {
   return new Promise((resolve, reject) => {
     execFile("glab", args, { maxBuffer: 1024 * 1024 * 32 }, (err, stdout, stderr) => {
       if (err) return reject(new Error(stderr || err.message));
       resolve(stdout);
     });
   });
+}
+
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+// ponytail: retry only errors that look like a network blip (timeout, DNS,
+// connection reset) — a 404/403/422 is a real answer from GitLab, retrying
+// it just delays the same failure.
+const TRANSIENT = /i\/o timeout|ETIMEDOUT|ECONNRESET|ECONNREFUSED|EAI_AGAIN|dial tcp/i;
+async function glab(args, attempt = 1) {
+  try {
+    return await glabOnce(args);
+  } catch (err) {
+    if (attempt < 3 && TRANSIENT.test(err.message)) {
+      await sleep(300 * attempt);
+      return glab(args, attempt + 1);
+    }
+    throw err;
+  }
 }
 
 async function glabApi(path, method = "GET") {
