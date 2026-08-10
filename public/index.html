@@ -151,6 +151,9 @@ button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
 .row.quiet{opacity:.62}
 .row.quiet:hover{opacity:1}
 
+.grip{flex:none;cursor:grab;color:var(--text-faint);font-size:12px;padding:0 1px;user-select:none}
+.grip:active{cursor:grabbing}
+.row.dragging{opacity:.35}
 .rel{flex:none;width:9px;height:9px;border-radius:50%;box-sizing:border-box}
 .rel.authored{background:var(--green)}
 .rel.reviewing{background:transparent;border:2px solid var(--blue)}
@@ -263,12 +266,27 @@ function toggleFavorite(project){
   render();
 }
 
+// ponytail: an ordered array, not a Set — drag-to-reorder needs a position
+// to mean something, and the persisted shape (JSON array) hasn't changed
 var LS_FAV_MRS='wf.favMrs';
-var favMrs = new Set();
-try{ (JSON.parse(localStorage.getItem(LS_FAV_MRS))||[]).forEach(function(k){favMrs.add(k);}); }catch(e){}
+var favMrs = [];
+try{ var f=JSON.parse(localStorage.getItem(LS_FAV_MRS)); if(Array.isArray(f)) favMrs=f; }catch(e){}
+function isMrFavorited(url){ return favMrs.indexOf(url)>=0; }
+function saveFavMrs(){ localStorage.setItem(LS_FAV_MRS, JSON.stringify(favMrs)); }
 function toggleFavoriteMr(url){
-  if(favMrs.has(url)) favMrs.delete(url); else favMrs.add(url);
-  localStorage.setItem(LS_FAV_MRS, JSON.stringify(Array.from(favMrs)));
+  var i=favMrs.indexOf(url);
+  if(i>=0) favMrs.splice(i,1); else favMrs.push(url);
+  saveFavMrs();
+  render();
+}
+function reorderFavMrs(draggedUrl,targetUrl){
+  if(draggedUrl===targetUrl) return;
+  var i=favMrs.indexOf(draggedUrl);
+  if(i<0) return;
+  favMrs.splice(i,1);
+  var j=favMrs.indexOf(targetUrl);
+  favMrs.splice(j<0?favMrs.length:j, 0, draggedUrl);
+  saveFavMrs();
   render();
 }
 var data=null, fetchedAt=null, fetchError=null, demo=false, tickTimer=null;
@@ -410,13 +428,14 @@ var I={
 /* ── grouping ──────────────────────────────────────────── */
 function buildWatchedMrs(){
   if(!data||!data.groups) return [];
-  var mrs=[];
+  var byUrl={};
   data.groups.forEach(function(g){
-    g.mrs.forEach(function(mr){
-      if(favMrs.has(mr.web_url)) mrs.push(Object.assign({},mr,{_project:g.project}));
-    });
+    g.mrs.forEach(function(mr){ byUrl[mr.web_url]=Object.assign({},mr,{_project:g.project}); });
   });
-  return sortRows(mrs);
+  // manual drag order wins here, not sortRows — that's the whole point of favoriting individual MRs
+  var ordered=[];
+  favMrs.forEach(function(url){ if(byUrl[url]) ordered.push(byUrl[url]); });
+  return ordered;
 }
 
 function buildWatched(){
@@ -548,16 +567,27 @@ function groupEl(g,opts){
   d.appendChild(s);
 
   var rows=el('div','rows');
-  g.mrs.forEach(function(mr){ rows.appendChild(rowEl(mr,g)); });
+  g.mrs.forEach(function(mr){ rows.appendChild(rowEl(mr,g,{draggable:g.key==='pinned-mrs'})); });
   d.appendChild(rows);
   return d;
 }
 
-function rowEl(mr,g){
+function rowEl(mr,g,opts){
+  opts=opts||{};
   var lv=level(mr), isBot=BOT.test(mr.author||'');
   var r=el('div','row '+lv);
   if(mr.draft) r.classList.add('draft');
   if(lv==='ok' && (isBot||mr.draft||mr.relationship==='other')) r.classList.add('quiet');
+
+  if(opts.draggable){
+    var grip=el('span','grip','⠿'); grip.title='Drag to reorder';
+    grip.draggable=true;
+    grip.addEventListener('dragstart',function(e){ e.dataTransfer.effectAllowed='move'; e.dataTransfer.setData('text/plain', mr.web_url); r.classList.add('dragging'); });
+    grip.addEventListener('dragend',function(){ r.classList.remove('dragging'); });
+    r.appendChild(grip);
+    r.addEventListener('dragover',function(e){ e.preventDefault(); e.dataTransfer.dropEffect='move'; });
+    r.addEventListener('drop',function(e){ e.preventDefault(); reorderFavMrs(e.dataTransfer.getData('text/plain'), mr.web_url); });
+  }
 
   var rel=el('span','rel '+(mr.relationship||'other'));
   rel.title = mr.relationship==='authored' ? 'You authored this'
@@ -594,7 +624,7 @@ function rowEl(mr,g){
   r.appendChild(when);
 
   var acts=el('div','acts');
-  var isFavMr=favMrs.has(mr.web_url);
+  var isFavMr=isMrFavorited(mr.web_url);
   var fb=el('button','fav'+(isFavMr?' on':''), isFavMr?'★':'☆');
   fb.title=isFavMr?'Unfollow':'Follow this MR';
   fb.addEventListener('click',function(){ toggleFavoriteMr(mr.web_url); });
