@@ -200,14 +200,71 @@ async function refresh() {
   }
 }
 
+// Once a favorited MR merges it drops out of the state=opened feed entirely.
+// "Watch it" means: keep looking it up directly by iid (works for any
+// state), and once merged, find the pipeline GitLab ran against the merge
+// commit on the target branch — that's the deploy/release pipeline, not the
+// MR's own (now-irrelevant) CI pipeline.
+function parseMrUrl(mrUrl) {
+  const m = /^https:\/\/gitlab\.com\/(.+)\/-\/merge_requests\/(\d+)/.exec(mrUrl);
+  return m ? { path: m[1], iid: m[2] } : null;
+}
+
+async function fetchMergedWatch(mrUrl) {
+  const parsed = parseMrUrl(mrUrl);
+  if (!parsed) throw new Error("unrecognized MR URL");
+
+  const detail = await glabApi(`projects/${encodeURIComponent(parsed.path)}/merge_requests/${parsed.iid}`);
+  if (detail.state === "opened") return null; // still open — already covered by the normal group list
+
+  const entry = {
+    web_url: detail.web_url,
+    title: detail.title,
+    project: parsed.path,
+    project_id: detail.project_id,
+    updated_at: detail.merged_at || detail.closed_at || detail.updated_at,
+    merged: detail.state === "merged",
+    closed: detail.state === "closed",
+    pipeline: null,
+  };
+
+  if (entry.merged) {
+    const sha = detail.merge_commit_sha || detail.squash_commit_sha || detail.sha;
+    if (sha) {
+      const pipelines = await glabApi(`projects/${detail.project_id}/pipelines?sha=${sha}&per_page=5`);
+      const match = (pipelines || []).find((p) => p.ref === detail.target_branch) ?? (pipelines || [])[0];
+      if (match) entry.pipeline = { id: match.id, status: match.status, web_url: match.web_url };
+    }
+  }
+  return entry;
+}
+
 const MIME = { ".html": "text/html", ".js": "text/javascript", ".css": "text/css" };
 
 const server = createServer(async (req, res) => {
   const url = new URL(req.url, "http://localhost");
 
   if (url.pathname === "/api/mrs") {
+    let favUrls = [];
+    try {
+      favUrls = JSON.parse(url.searchParams.get("favMrs") || "[]");
+    } catch {
+      favUrls = [];
+    }
+    const openUrls = new Set(cache.groups.flatMap((g) => g.mrs.map((m) => m.web_url)));
+    const toWatch = favUrls.filter((u) => !openUrls.has(u));
+
+    const results = await Promise.all(
+      toWatch.map((u) => fetchMergedWatch(u).then(
+        (entry) => ({ ok: true, entry }),
+        (err) => ({ ok: false, url: u, error: err.message }),
+      )),
+    );
+    const mergedWatched = results.filter((r) => r.ok && r.entry).map((r) => r.entry);
+    const mergedWatchErrors = results.filter((r) => !r.ok).map((r) => `${r.url}: ${r.error}`);
+
     res.writeHead(200, { "Content-Type": "application/json" });
-    res.end(JSON.stringify(cache));
+    res.end(JSON.stringify({ ...cache, mergedWatched, warnings: [...cache.warnings, ...mergedWatchErrors] }));
     return;
   }
 

@@ -177,6 +177,7 @@ button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
 .rel.authored{background:var(--green)}
 .rel.reviewing{background:transparent;border:2px solid var(--blue)}
 .rel.other{background:transparent;border:1px solid var(--line-strong)}
+.rel.merged{background:var(--ok)}
 
 .main{flex:1 1 auto;min-width:0;display:flex;align-items:center;gap:7px}
 .title{
@@ -318,7 +319,7 @@ function reorderFavMrs(draggedUrl,targetUrl,after){
   saveFavMrs();
   render();
 }
-var data=null, fetchedAt=null, fetchError=null, demo=false, tickTimer=null;
+var data=null, fetchedAt=null, fetchError=null, demo=false, tickTimer=null, mergedWatched=[];
 var seenGroups = new Set();   // groups we've already applied default-collapse to
 
 var BOT=/bot|renovate|dependabot/i;
@@ -329,7 +330,7 @@ var POLL_MS=15000, nextPollAt=Date.now()+POLL_MS;
 function load(){
   nextPollAt=Date.now()+POLL_MS;
   if(demo){ apply(DEMO_DATA); return; }
-  fetch('/api/mrs',{headers:{'Accept':'application/json'}})
+  fetch('/api/mrs?favMrs='+encodeURIComponent(JSON.stringify(favMrs)),{headers:{'Accept':'application/json'}})
     .then(function(r){
       if(r.status===404){ demo=true; throw {demo:true}; }
       if(!r.ok) throw new Error('HTTP '+r.status);
@@ -342,10 +343,26 @@ function load(){
       render();
     });
 }
+// A merged/closed favorited MR arrives from the server as a smaller,
+// differently-shaped record — reshape it to look like a normal MR object so
+// rowEl/checkTransitions/sortRows don't need a second code path for it.
+function normalizeMergedEntry(e){
+  return {
+    project:e.project, project_id:e.project_id, iid:null,
+    title:e.title, web_url:e.web_url, author:null, draft:false,
+    updated_at:e.updated_at, merge_status:null, approved:null, approvals_left:0,
+    needs_rebase:false, needs_re_review:false, pipeline:e.pipeline,
+    urgent:!!(e.pipeline && (e.pipeline.status==='failed'||e.pipeline.status==='canceled')),
+    relationship:'merged', merged:e.merged, closed:e.closed, _project:e.project
+  };
+}
+
 function apply(d){
   data=d; fetchError=d.error||null;
   fetchedAt = d.fetchedAt ? new Date(d.fetchedAt) : new Date();
-  checkTransitions(d.groups||[]);
+  mergedWatched = (d.mergedWatched||[]).map(normalizeMergedEntry);
+  var mergedAsGroups = mergedWatched.map(function(mr){ return {project:mr.project, mrs:[mr]}; });
+  checkTransitions((d.groups||[]).concat(mergedAsGroups));
   render();
 }
 
@@ -519,11 +536,12 @@ var I={
 
 /* ── grouping ──────────────────────────────────────────── */
 function buildWatchedMrs(){
-  if(!data||!data.groups) return [];
+  if(!data) return [];
   var byUrl={};
-  data.groups.forEach(function(g){
+  (data.groups||[]).forEach(function(g){
     g.mrs.forEach(function(mr){ byUrl[mr.web_url]=Object.assign({},mr,{_project:g.project}); });
   });
+  mergedWatched.forEach(function(mr){ byUrl[mr.web_url]=mr; });
   // manual drag order wins here, not sortRows — that's the whole point of favoriting individual MRs
   var ordered=[];
   favMrs.forEach(function(url){ if(byUrl[url]) ordered.push(byUrl[url]); });
@@ -701,6 +719,7 @@ function rowEl(mr,g,opts){
   var rel=el('span','rel '+(mr.relationship||'other'));
   rel.title = mr.relationship==='authored' ? 'You authored this'
             : mr.relationship==='reviewing' ? 'Your review is requested'
+            : mr.relationship==='merged' ? (mr.merged ? 'Merged — watching its release pipeline' : 'Closed without merging')
             : 'Activity in a repo you own';
   r.appendChild(rel);
 
@@ -711,6 +730,8 @@ function rowEl(mr,g,opts){
   main.appendChild(a);
 
   var tags=el('span','tags');
+  if(mr.merged) tags.appendChild(el('span','tag ok','merged'));
+  else if(mr.closed) tags.appendChild(el('span','tag muted','closed'));
   var ps=pstat(mr);
   if(ps==='failed') tags.appendChild(el('span','tag crit','pipeline failed'));
   else if(ps==='canceled') tags.appendChild(el('span','tag crit','pipeline canceled'));
