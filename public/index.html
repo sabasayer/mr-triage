@@ -169,6 +169,8 @@ button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
 .row.quiet:hover{opacity:1}
 
 .grip{flex:none;cursor:grab;color:var(--text-faint);font-size:12px;padding:0 1px;user-select:none}
+.drop-end{height:10px}
+.drop-end.over{height:10px;background:var(--accent-soft);border-top:2px solid var(--accent)}
 .grip:active{cursor:grabbing}
 .row.dragging{opacity:.35}
 .rel{flex:none;width:9px;height:9px;border-radius:50%;box-sizing:border-box}
@@ -300,13 +302,19 @@ function toggleFavoriteMr(url){
   saveFavMrs();
   render();
 }
-function reorderFavMrs(draggedUrl,targetUrl){
+// targetUrl null means "drop past the last row" — always to the very end.
+// after=true inserts below the target row instead of above it, so dropping
+// on the bottom half of the last row (or the empty space below it) actually
+// reaches the last position instead of landing just above it.
+function reorderFavMrs(draggedUrl,targetUrl,after){
   if(draggedUrl===targetUrl) return;
   var i=favMrs.indexOf(draggedUrl);
   if(i<0) return;
   favMrs.splice(i,1);
+  if(targetUrl==null){ favMrs.push(draggedUrl); saveFavMrs(); render(); return; }
   var j=favMrs.indexOf(targetUrl);
-  favMrs.splice(j<0?favMrs.length:j, 0, draggedUrl);
+  if(j<0) j=favMrs.length; else if(after) j+=1;
+  favMrs.splice(j, 0, draggedUrl);
   saveFavMrs();
   render();
 }
@@ -651,8 +659,20 @@ function groupEl(g,opts){
   d.appendChild(s);
 
   var rows=el('div','rows');
-  g.mrs.forEach(function(mr){ rows.appendChild(rowEl(mr,g,{draggable:g.key==='pinned-mrs'})); });
+  var draggableGroup = g.key==='pinned-mrs';
+  g.mrs.forEach(function(mr){ rows.appendChild(rowEl(mr,g,{draggable:draggableGroup})); });
   d.appendChild(rows);
+
+  if(draggableGroup && g.mrs.length){
+    var dropEnd=el('div','drop-end');
+    dropEnd.addEventListener('dragover',function(e){ e.preventDefault(); e.dataTransfer.dropEffect='move'; dropEnd.classList.add('over'); });
+    dropEnd.addEventListener('dragleave',function(){ dropEnd.classList.remove('over'); });
+    dropEnd.addEventListener('drop',function(e){
+      e.preventDefault(); dropEnd.classList.remove('over');
+      reorderFavMrs(e.dataTransfer.getData('text/plain'), null);
+    });
+    d.appendChild(dropEnd);
+  }
   return d;
 }
 
@@ -670,7 +690,12 @@ function rowEl(mr,g,opts){
     grip.addEventListener('dragend',function(){ r.classList.remove('dragging'); });
     r.appendChild(grip);
     r.addEventListener('dragover',function(e){ e.preventDefault(); e.dataTransfer.dropEffect='move'; });
-    r.addEventListener('drop',function(e){ e.preventDefault(); reorderFavMrs(e.dataTransfer.getData('text/plain'), mr.web_url); });
+    r.addEventListener('drop',function(e){
+      e.preventDefault(); e.stopPropagation();
+      var rect=r.getBoundingClientRect();
+      var after = e.clientY > rect.top + rect.height/2;
+      reorderFavMrs(e.dataTransfer.getData('text/plain'), mr.web_url, after);
+    });
   }
 
   var rel=el('span','rel '+(mr.relationship||'other'));
