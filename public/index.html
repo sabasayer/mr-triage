@@ -142,6 +142,10 @@ button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
 .favBtn:hover{color:var(--warn)}
 .favBtn.on{color:var(--warn)}
 .section-label{font-size:11px;font-weight:750;letter-spacing:.06em;text-transform:uppercase;color:var(--text-faint);margin:4px 2px 6px}
+.hiddenbar{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:12px;font-size:11.5px;color:var(--text-faint)}
+.hidechip{display:inline-flex;align-items:center;gap:4px;background:var(--chip);border:1px solid var(--line);border-radius:999px;padding:2px 4px 2px 9px;color:var(--text-dim)}
+.hidechip button{padding:0 4px;color:var(--text-faint)}
+.hidechip button:hover{color:var(--crit)}
 .group.pinned{border-color:var(--warn-line)}
 #watched:not(:empty){margin-bottom:18px;padding-bottom:10px;border-bottom:1px dashed var(--line-strong)}
 .badge{
@@ -185,6 +189,7 @@ button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
   color:var(--text);font-weight:520;font-size:13px;letter-spacing:-.005em;
 }
 .title:hover{color:var(--accent)}
+.mr-iid{color:var(--text-dim);font-weight:450;font-variant-numeric:tabular-nums}
 .row.draft .title{color:var(--text-dim);font-weight:450}
 
 .tags{flex:none;display:flex;align-items:center;gap:4px}
@@ -267,6 +272,7 @@ svg{display:block}
   </header>
 
   <div id="warnings"></div>
+  <div id="hiddenBar"></div>
   <div id="watched"></div>
   <main id="list"></main>
 </div>
@@ -319,6 +325,17 @@ function reorderFavMrs(draggedUrl,targetUrl,after){
   saveFavMrs();
   render();
 }
+var LS_HIDDEN='wf.hiddenAuthors';
+var hiddenAuthors = new Set();
+try{ (JSON.parse(localStorage.getItem(LS_HIDDEN))||[]).forEach(function(k){hiddenAuthors.add(k);}); }catch(e){}
+function toggleHiddenAuthor(author){
+  if(!author) return;
+  if(hiddenAuthors.has(author)) hiddenAuthors.delete(author); else hiddenAuthors.add(author);
+  localStorage.setItem(LS_HIDDEN, JSON.stringify(Array.from(hiddenAuthors)));
+  render();
+}
+function visible(mr){ return !hiddenAuthors.has(mr.author); }
+
 var data=null, fetchedAt=null, fetchError=null, demo=false, tickTimer=null, mergedWatched=[];
 var seenGroups = new Set();   // groups we've already applied default-collapse to
 
@@ -348,7 +365,7 @@ function load(){
 // rowEl/checkTransitions/sortRows don't need a second code path for it.
 function normalizeMergedEntry(e){
   return {
-    project:e.project, project_id:e.project_id, iid:null,
+    project:e.project, project_id:e.project_id, iid:e.iid||null,
     title:e.title, web_url:e.web_url, author:null, draft:false,
     updated_at:e.updated_at, merge_status:null, approved:null, approvals_left:0,
     needs_rebase:false, needs_re_review:false, pipeline:e.pipeline,
@@ -404,6 +421,7 @@ function checkTransitions(groups){
   var seen=new Set();
   groups.forEach(function(g){
     g.mrs.forEach(function(mr){
+      if(hiddenAuthors.has(mr.author)) return;
       seen.add(mr.web_url);
       var prev=prevMrState.get(mr.web_url);
       var ps=pstat(mr);
@@ -552,7 +570,7 @@ function buildWatched(){
   if(!data||!data.groups) return [];
   return data.groups
     .filter(function(g){ return favorites.has(g.project); })
-    .map(function(g){ return {key:'repo:'+g.project, label:g.project, kind:'repo', short:g.short, mrs:sortRows(g.mrs.slice()), bot:false}; })
+    .map(function(g){ return {key:'repo:'+g.project, label:g.project, kind:'repo', short:g.short, mrs:sortRows(g.mrs.filter(visible)), bot:false}; })
     .sort(function(a,b){ return Number(b.mrs.some(function(m){return level(m)==='crit';})) - Number(a.mrs.some(function(m){return level(m)==='crit';})) || a.label.localeCompare(b.label); });
 }
 
@@ -561,7 +579,9 @@ function buildGroups(){
   if(!data||!data.groups) return groups;
   if(mode==='repo'){
     data.groups.filter(function(g){ return !favorites.has(g.project); }).forEach(function(g){
-      groups.push({key:'repo:'+g.project, label:g.project, kind:'repo', short:g.short, mrs:sortRows(g.mrs.slice()), bot:false});
+      var mrs=g.mrs.filter(visible);
+      if(!mrs.length) return;
+      groups.push({key:'repo:'+g.project, label:g.project, kind:'repo', short:g.short, mrs:sortRows(mrs), bot:false});
     });
   }else{
     var by={};
@@ -569,6 +589,7 @@ function buildGroups(){
       if(favorites.has(g.project)) return;
       g.mrs.forEach(function(mr){
         var a=mr.author||'unknown';
+        if(hiddenAuthors.has(a)) return;
         (by[a]=by[a]||[]).push(Object.assign({},mr,{_project:g.project}));
       });
     });
@@ -588,7 +609,7 @@ function buildGroups(){
 
 /* ── render ────────────────────────────────────────────── */
 function render(){
-  renderStatus(); renderWarnings();
+  renderStatus(); renderWarnings(); renderHidden();
 
   var watched=$('#watched'); watched.textContent='';
   var watchedMrs=buildWatchedMrs();
@@ -606,7 +627,7 @@ function render(){
   list.textContent='';
 
   var crit=0;
-  (data&&data.groups||[]).forEach(function(g){ g.mrs.forEach(function(m){ if(level(m)==='crit') crit++; }); });
+  (data&&data.groups||[]).forEach(function(g){ g.mrs.filter(visible).forEach(function(m){ if(level(m)==='crit') crit++; }); });
   var alarm=$('#alarm');
   alarm.classList.toggle('on', crit>0);
   $('#alarmText').textContent = crit + (crit===1?' needs attention':' need attention');
@@ -673,6 +694,12 @@ function groupEl(g,opts){
     favBtn.addEventListener('click',function(e){ e.preventDefault(); e.stopPropagation(); toggleFavorite(g.label); });
     meta.appendChild(favBtn);
   }
+  if(g.kind==='author' && !opts.pinned){
+    var hideBtn=el('button','favBtn','🙈');
+    hideBtn.title='Hide MRs from '+g.label;
+    hideBtn.addEventListener('click',function(e){ e.preventDefault(); e.stopPropagation(); toggleHiddenAuthor(g.label); });
+    meta.appendChild(hideBtn);
+  }
   s.appendChild(meta);
   d.appendChild(s);
 
@@ -725,7 +752,9 @@ function rowEl(mr,g,opts){
 
   var main=el('div','main');
   if(mr.draft) main.appendChild(el('span','tag draft','draft'));
-  var a=el('a','title',mr.title); a.href=mr.web_url; a.target='_blank'; a.rel='noopener';
+  var a=el('a','title'); a.href=mr.web_url; a.target='_blank'; a.rel='noopener';
+  if(mr.iid) a.appendChild(el('span','mr-iid','!'+mr.iid+' '));
+  a.appendChild(document.createTextNode(mr.title));
   a.title = (g.kind==='author' && mr._project ? mr._project+' · ' : '') + mr.title;
   main.appendChild(a);
 
@@ -769,6 +798,11 @@ function rowEl(mr,g,opts){
   cb.appendChild(icon(I.copy,'1.4'));
   cb.addEventListener('click',function(){ copy(mr.web_url,cb); });
   acts.appendChild(cb);
+  if(mr.author && g.key!=='pinned-mrs'){
+    var hb=el('button','hide','🙈'); hb.title='Hide MRs from '+mr.author;
+    hb.addEventListener('click',function(){ toggleHiddenAuthor(mr.author); });
+    acts.appendChild(hb);
+  }
   r.appendChild(acts);
   return r;
 }
@@ -780,6 +814,21 @@ function renderStatus(){
   if(demo){ s.appendChild(el('span','demo','demo data')); }
   if(fetchError){ s.classList.add('err'); s.appendChild(el('span',null,'fetch error: '+fetchError)); return; }
   s.appendChild(el('span',null, fetchedAt ? 'updated '+ago(fetchedAt.toISOString())+' ago' : 'loading…'));
+}
+
+function renderHidden(){
+  var box=$('#hiddenBar'); box.textContent='';
+  if(!hiddenAuthors.size) return;
+  var d=el('div','hiddenbar');
+  d.appendChild(document.createTextNode('Hidden:'));
+  Array.from(hiddenAuthors).sort().forEach(function(a){
+    var chip=el('span','hidechip'); chip.appendChild(document.createTextNode(a));
+    var x=el('button',null,'✕'); x.title='Unhide '+a;
+    x.addEventListener('click',function(){ toggleHiddenAuthor(a); });
+    chip.appendChild(x);
+    d.appendChild(chip);
+  });
+  box.appendChild(d);
 }
 
 function renderWarnings(){

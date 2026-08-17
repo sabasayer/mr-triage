@@ -220,6 +220,7 @@ async function fetchMergedWatch(mrUrl) {
   const entry = {
     web_url: detail.web_url,
     title: detail.title,
+    iid: detail.iid,
     project: parsed.path,
     project_id: detail.project_id,
     updated_at: detail.merged_at || detail.closed_at || detail.updated_at,
