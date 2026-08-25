@@ -269,6 +269,20 @@ const server = createServer(async (req, res) => {
     return;
   }
 
+  const jobsMatch = url.pathname.match(/^\/api\/pipelines\/(\d+)\/(\d+)\/jobs$/);
+  if (jobsMatch && req.method === "GET") {
+    const [, projectId, pipelineId] = jobsMatch;
+    try {
+      const jobs = await glabApi(`projects/${projectId}/pipelines/${pipelineId}/jobs?scope[]=failed&per_page=50`);
+      res.writeHead(200, { "Content-Type": "application/json" });
+      res.end(JSON.stringify((jobs || []).map((j) => ({ name: j.name, web_url: j.web_url }))));
+    } catch (err) {
+      res.writeHead(500, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ error: err.message }));
+    }
+    return;
+  }
+
   const retryMatch = url.pathname.match(/^\/api\/pipelines\/(\d+)\/(\d+)\/retry$/);
   if (retryMatch && req.method === "POST") {
     const [, projectId, pipelineId] = retryMatch;

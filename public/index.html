@@ -95,6 +95,15 @@ button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
 .notify-panel h4{margin:0 0 6px;font-size:10.5px;font-weight:750;letter-spacing:.05em;text-transform:uppercase;color:var(--text-faint)}
 .notify-panel label{display:flex;align-items:center;gap:7px;font-size:12.5px;color:var(--text);padding:3px 0;cursor:pointer}
 .notify-panel input{margin:0}
+.waiting-panel{max-width:340px}
+.waiting-panel label{align-items:flex-start}
+.waiting-panel label span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.waiting-panel .empty{font-size:12.5px;color:var(--text-faint)}
+.waiting-panel .copyBtn{
+  margin-top:8px;width:100%;text-align:center;padding:6px 0;border-radius:6px;
+  background:var(--accent);color:#fff;font-size:12.5px;font-weight:650;
+}
+.waiting-panel .copyBtn:disabled{opacity:.4;cursor:not-allowed}
 .status{font-size:11.5px;color:var(--text-faint);white-space:nowrap;display:flex;align-items:center;gap:6px}
 .ring{
   --pct:0; flex:none;width:11px;height:11px;border-radius:50%;
@@ -202,6 +211,23 @@ button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
 .tag.ok{color:var(--ok);background:rgba(14,158,105,.10);border-color:rgba(14,158,105,.35)}
 .tag.muted{color:var(--text-faint);background:var(--chip);border-color:var(--line)}
 .tag.draft{color:var(--text-faint);background:var(--chip);border-color:var(--line);text-transform:uppercase;letter-spacing:.05em;font-size:9.5px}
+button.tag{cursor:pointer}
+.job-popover{
+  position:fixed;z-index:30;min-width:220px;max-width:340px;
+  background:var(--panel);border:1px solid var(--line-strong);border-radius:9px;
+  box-shadow:0 6px 20px rgba(0,0,0,.18);padding:8px 10px;
+}
+.job-popover h4{margin:0 0 6px;font-size:10.5px;font-weight:750;letter-spacing:.05em;text-transform:uppercase;color:var(--text-faint)}
+.job-popover .empty{font-size:12.5px;color:var(--text-faint)}
+.job-row{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:3px 0}
+.job-row a{font-size:12.5px;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.job-row a:hover{color:var(--accent)}
+.job-row button.copy{opacity:.5;width:20px;height:20px;display:grid;place-items:center;border-radius:4px;flex:none}
+.job-row button.copy:hover{opacity:1}
+.job-popover .copyBtn{
+  margin-top:8px;width:100%;text-align:center;padding:6px 0;border-radius:6px;
+  background:var(--accent);color:#fff;font-size:12.5px;font-weight:650;
+}
 .pipe{flex:none;display:inline-flex;align-items:center;gap:4px;font-size:11px;color:var(--text-faint);white-space:nowrap}
 .pipe .dot{width:7px;height:7px;border-radius:50%;background:var(--text-faint)}
 .pipe.ok .dot{background:var(--ok)}
@@ -264,6 +290,8 @@ svg{display:block}
       <button id="sortCreator" aria-pressed="false">Creator</button>
     </div>
     <div class="notify-wrap">
+      <button id="waitingBtn" class="gear" title="Copy MRs waiting for approval" aria-expanded="false">📋</button>
+      <div id="waitingPanel" class="notify-panel waiting-panel" hidden></div>
       <button id="notifyBtn" class="bell" aria-pressed="false" title="Click to enable notifications">🔔</button>
       <button id="notifySettingsBtn" class="gear" title="Notification settings" aria-expanded="false">⚙</button>
       <div id="notifyPanel" class="notify-panel" hidden></div>
@@ -495,6 +523,58 @@ updateNotifyBtn();
   });
   document.addEventListener('click',function(e){
     if(!panel.hidden && !panel.contains(e.target) && e.target!==gear) closePanel();
+  });
+})();
+
+/* ── copy waiting-for-approval MRs ───────────────────────── */
+(function(){
+  var panel=$('#waitingPanel'), btn=$('#waitingBtn');
+  var checkedUrls=new Set();
+  function copyText(text,copyBtn){
+    var done=function(){ copyBtn.textContent='Copied!'; setTimeout(function(){ copyBtn.textContent='Copy selected'; },1100); };
+    if(navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(text).then(done);
+    else{
+      var t=document.createElement('textarea'); t.value=text; t.style.position='fixed'; t.style.opacity='0';
+      document.body.appendChild(t); t.select();
+      try{ document.execCommand('copy'); done(); }catch(e){}
+      document.body.removeChild(t);
+    }
+  }
+  function renderPanel(){
+    panel.textContent='';
+    panel.appendChild(el('h4',null,'Waiting for approval'));
+    var mrs=waitingForApprovalMrs();
+    if(!mrs.length){ panel.appendChild(el('div','empty','Nothing waiting on you.')); return; }
+    mrs.forEach(function(mr){ if(!checkedUrls.has(mr.web_url)) checkedUrls.add(mr.web_url); });
+    mrs.forEach(function(mr){
+      var label=el('label');
+      var cb=document.createElement('input'); cb.type='checkbox'; cb.checked=checkedUrls.has(mr.web_url);
+      cb.addEventListener('change',function(){
+        if(cb.checked) checkedUrls.add(mr.web_url); else checkedUrls.delete(mr.web_url);
+      });
+      label.appendChild(cb);
+      label.appendChild(el('span',null,mr.repo+' '+(mr.iid?'!'+mr.iid+' ':'')+mr.title));
+      panel.appendChild(label);
+    });
+    var copyBtn=el('button','copyBtn','Copy selected');
+    copyBtn.addEventListener('click',function(){
+      var text=mrs.filter(function(mr){ return checkedUrls.has(mr.web_url); })
+        .map(function(mr){ return mr.repo+' '+(mr.iid?'!'+mr.iid+' ':'')+mr.title+' — '+mr.web_url; })
+        .join('\n');
+      copyText(text,copyBtn);
+    });
+    panel.appendChild(copyBtn);
+  }
+  function closePanel(){ panel.hidden=true; btn.setAttribute('aria-expanded','false'); }
+  btn.addEventListener('click',function(e){
+    e.stopPropagation();
+    var open=panel.hidden;
+    if(open) renderPanel();
+    panel.hidden=!open;
+    btn.setAttribute('aria-expanded', String(open));
+  });
+  document.addEventListener('click',function(e){
+    if(!panel.hidden && !panel.contains(e.target) && e.target!==btn) closePanel();
   });
 })();
 
@@ -762,8 +842,12 @@ function rowEl(mr,g,opts){
   if(mr.merged) tags.appendChild(el('span','tag ok','merged'));
   else if(mr.closed) tags.appendChild(el('span','tag muted','closed'));
   var ps=pstat(mr);
-  if(ps==='failed') tags.appendChild(el('span','tag crit','pipeline failed'));
-  else if(ps==='canceled') tags.appendChild(el('span','tag crit','pipeline canceled'));
+  if(ps==='failed'||ps==='canceled'){
+    var pipeBtn=el('button','tag crit',ps==='failed'?'pipeline failed':'pipeline canceled');
+    pipeBtn.title='Show failed jobs';
+    pipeBtn.addEventListener('click',function(e){ e.stopPropagation(); toggleJobsPopover(mr,pipeBtn); });
+    tags.appendChild(pipeBtn);
+  }
   else if(ps==='running'||ps==='pending'){ var pr=el('span','pipe run'); pr.appendChild(el('i','dot')); pr.appendChild(el('span',null,ps)); tags.appendChild(pr); }
   else if(ps==='success'){ var po=el('span','pipe ok'); po.title='pipeline passed'; po.appendChild(el('i','dot')); tags.appendChild(po); }
   if(mr.needs_rebase) tags.appendChild(el('span','tag warn','rebase'));
@@ -842,6 +926,45 @@ function renderWarnings(){
   d.appendChild(ul); box.appendChild(d);
 }
 
+/* ── failed jobs popover ──────────────────────────────────── */
+var jobsPopoverEl=null, jobsPopoverFor=null;
+function closeJobsPopover(){ if(jobsPopoverEl) jobsPopoverEl.remove(); jobsPopoverEl=null; jobsPopoverFor=null; }
+document.addEventListener('click',function(e){ if(jobsPopoverEl && !jobsPopoverEl.contains(e.target)) closeJobsPopover(); });
+document.addEventListener('keydown',function(e){ if(e.key==='Escape') closeJobsPopover(); });
+
+function toggleJobsPopover(mr,anchor){
+  if(jobsPopoverFor===anchor){ closeJobsPopover(); return; }
+  closeJobsPopover();
+  var pid = mr.project_id!=null ? mr.project_id : encodeURIComponent(mr._project||mr.project||'');
+  var box=el('div','job-popover'); box.textContent='Loading…';
+  var r=anchor.getBoundingClientRect();
+  box.style.top=(r.bottom+6)+'px'; box.style.left=r.left+'px';
+  document.body.appendChild(box);
+  jobsPopoverEl=box; jobsPopoverFor=anchor;
+  fetch('/api/pipelines/'+pid+'/'+mr.pipeline.id+'/jobs').then(function(res){ return res.json(); }).then(function(jobs){
+    if(jobsPopoverEl!==box) return;
+    box.textContent='';
+    box.appendChild(el('h4',null,'Failed jobs'));
+    if(!jobs.length || jobs.error){ box.appendChild(el('div','empty','No failed job details.')); return; }
+    jobs.forEach(function(j){
+      var row=el('div','job-row');
+      var link=el('a',null,j.name); link.href=j.web_url; link.target='_blank'; link.rel='noopener';
+      row.appendChild(link);
+      var jcb=el('button','copy'); jcb.title='Copy job link'; jcb.appendChild(icon(I.copy,'1.1'));
+      jcb.addEventListener('click',function(){ copy(j.web_url,jcb); });
+      row.appendChild(jcb);
+      box.appendChild(row);
+    });
+    var copyAllBtn=el('button','copyBtn','Copy all links');
+    copyAllBtn.addEventListener('click',function(){
+      var text=jobs.map(function(j){ return j.name+' — '+j.web_url; }).join('\n');
+      if(navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(text);
+      copyAllBtn.textContent='Copied!'; setTimeout(function(){ copyAllBtn.textContent='Copy all links'; },1100);
+    });
+    box.appendChild(copyAllBtn);
+  }).catch(function(){ if(jobsPopoverEl===box) box.textContent='Failed to load jobs.'; });
+}
+
 /* ── actions ───────────────────────────────────────────── */
 function retry(mr,btn){
   var pid = mr.project_id!=null ? mr.project_id : encodeURIComponent(mr._project||mr.project||'');
@@ -851,6 +974,11 @@ function retry(mr,btn){
     .then(function(r){ if(!r.ok) throw new Error('HTTP '+r.status); })
     .catch(function(){ btn.title='Retry failed'; })
     .then(function(){ btn.classList.remove('busy'); btn.disabled=false; setTimeout(load,1200); });
+}
+function waitingForApprovalMrs(){
+  return (data&&data.groups||[]).flatMap(function(g){
+    return g.mrs.map(function(mr){ return Object.assign({},mr,{repo:short(g.project).last}); });
+  }).filter(function(mr){ return mr.relationship==='authored' && !mr.draft && mr.approvals_left; });
 }
 function copy(url,btn){
   var done=function(){
