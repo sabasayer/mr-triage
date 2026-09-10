@@ -45,7 +45,7 @@ body{
 a{color:var(--accent);text-decoration:none}
 a:hover{color:var(--accent);text-decoration:underline;text-underline-offset:2px}
 button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
-.wrap{max-width:940px;margin:0 auto;padding:0 14px 56px}
+.wrap{max-width:940px;margin:0 auto;padding:0 14px 56px;transition:max-width .2s ease}
 
 /* ── top bar ───────────────────────────────────────────── */
 .top{
@@ -220,15 +220,17 @@ button.tag{cursor:pointer}
 .job-popover h4{margin:0 0 6px;font-size:10.5px;font-weight:750;letter-spacing:.05em;text-transform:uppercase;color:var(--text-faint)}
 .job-popover .empty{font-size:12.5px;color:var(--text-faint)}
 .job-row{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:3px 0}
-.job-row a{font-size:12.5px;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.job-row a{flex:1;font-size:12.5px;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .job-row a:hover{color:var(--accent)}
+.job-row .job-dur{flex:none;font-size:11px;color:var(--text-faint)}
 .job-row button.copy{opacity:.5;width:20px;height:20px;display:grid;place-items:center;border-radius:4px;flex:none}
 .job-row button.copy:hover{opacity:1}
 .job-popover .copyBtn{
   margin-top:8px;width:100%;text-align:center;padding:6px 0;border-radius:6px;
   background:var(--accent);color:#fff;font-size:12.5px;font-weight:650;
 }
-.pipe{flex:none;display:inline-flex;align-items:center;gap:4px;font-size:11px;color:var(--text-faint);white-space:nowrap}
+.pipe{flex:none;display:inline-flex;align-items:center;gap:4px;font-size:11px;color:var(--text-faint);white-space:nowrap;background:none;border:none;font-family:inherit;padding:0}
+.pipe.run{cursor:pointer}
 .pipe .dot{width:7px;height:7px;border-radius:50%;background:var(--text-faint)}
 .pipe.ok .dot{background:var(--ok)}
 .pipe.run .dot{background:var(--blue);animation:pulse 1.4s ease-in-out infinite}
@@ -270,6 +272,68 @@ svg{display:block}
   .who{width:74px}
   .acts button{opacity:1}
 }
+
+/* ── grid view (large screens) ─────────────────────────── */
+@media (min-width:900px){
+  body.view-grid .wrap{max-width:1480px}
+  body.view-grid #list,
+  body.view-grid #watched{
+    display:grid;
+    grid-template-columns:repeat(auto-fill,minmax(400px,1fr));
+    gap:14px;
+    align-items:start;
+  }
+  body.view-grid #watched:not(:empty){
+    margin-bottom:18px;padding-bottom:10px;border-bottom:1px dashed var(--line-strong);
+  }
+  body.view-grid #watched .section-label,
+  body.view-grid #list > .empty{
+    grid-column:1/-1;
+  }
+  body.view-grid .group{margin-bottom:0}
+  body.view-grid .rows{
+    display:grid;
+    grid-template-columns:repeat(auto-fill,minmax(260px,1fr));
+    gap:8px;
+    padding:10px;
+    border-top:0;
+  }
+  body.view-grid .row{
+    flex-direction:column;
+    align-items:stretch;
+    gap:6px;
+    padding:10px;
+    border:1px solid var(--line);
+    border-left-width:3px;
+    border-radius:8px;
+    border-bottom:1px solid var(--line);
+  }
+  body.view-grid .rows .row:last-child{border-bottom:1px solid var(--line)}
+  body.view-grid .main{
+    flex-direction:column;
+    align-items:flex-start;
+    gap:5px;
+  }
+  body.view-grid .title{white-space:normal;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
+  body.view-grid .tags{flex-wrap:wrap}
+  body.view-grid .who,
+  body.view-grid .when{width:auto;text-align:left}
+  body.view-grid .who::before{vertical-align:0}
+  body.view-grid .row-meta{
+    display:flex;align-items:center;justify-content:space-between;gap:8px;
+    font-size:11.5px;color:var(--text-faint);
+  }
+  body.view-grid .acts{
+    width:auto;justify-content:flex-start;margin-top:2px;
+    opacity:1;
+  }
+  body.view-grid .acts button{opacity:.38}
+  body.view-grid .row:hover .acts button{opacity:1}
+  body.view-grid .drop-end{grid-column:1/-1}
+}
+@media (max-width:899px){
+  .viewToggle{display:none}
+}
 </style>
 </head>
 <body>
@@ -288,6 +352,10 @@ svg{display:block}
       <button id="sortPriority" aria-pressed="true">Priority</button>
       <button id="sortDate" aria-pressed="false">Date</button>
       <button id="sortCreator" aria-pressed="false">Creator</button>
+    </div>
+    <div class="seg viewToggle" role="group" aria-label="View mode">
+      <button id="viewList" aria-pressed="true" title="List view">List</button>
+      <button id="viewGrid" aria-pressed="false" title="Grid view">Grid</button>
     </div>
     <div class="notify-wrap">
       <button id="waitingBtn" class="gear" title="Copy MRs waiting for approval" aria-expanded="false">📋</button>
@@ -310,8 +378,9 @@ svg{display:block}
 "use strict";
 
 /* ── state ─────────────────────────────────────────────── */
-var LS_MODE='wf.mode', LS_CLOSED='wf.closed', LS_SORT='wf.sort', LS_FAVS='wf.favorites';
+var LS_MODE='wf.mode', LS_CLOSED='wf.closed', LS_SORT='wf.sort', LS_FAVS='wf.favorites', LS_VIEW='wf.view';
 var mode = localStorage.getItem(LS_MODE)==='author' ? 'author' : 'repo';
+var viewMode = localStorage.getItem(LS_VIEW)==='grid' ? 'grid' : 'list';
 var SORTS=['priority','date','creator'];
 var sortMode = SORTS.indexOf(localStorage.getItem(LS_SORT))>=0 ? localStorage.getItem(LS_SORT) : 'priority';
 var closed = new Set();
@@ -689,6 +758,7 @@ function buildGroups(){
 
 /* ── render ────────────────────────────────────────────── */
 function render(){
+  document.body.classList.toggle('view-grid', viewMode==='grid');
   renderStatus(); renderWarnings(); renderHidden();
 
   var watched=$('#watched'); watched.textContent='';
@@ -845,12 +915,18 @@ function rowEl(mr,g,opts){
   if(ps==='failed'||ps==='canceled'){
     var pipeBtn=el('button','tag crit',ps==='failed'?'pipeline failed':'pipeline canceled');
     pipeBtn.title='Show failed jobs';
-    pipeBtn.addEventListener('click',function(e){ e.stopPropagation(); toggleJobsPopover(mr,pipeBtn); });
+    pipeBtn.addEventListener('click',function(e){ e.stopPropagation(); toggleJobsPopover(mr,pipeBtn,'failed'); });
     tags.appendChild(pipeBtn);
   }
-  else if(ps==='running'||ps==='pending'){ var pr=el('span','pipe run'); pr.appendChild(el('i','dot')); pr.appendChild(el('span',null,ps)); tags.appendChild(pr); }
+  else if(ps==='running'||ps==='pending'){
+    var pr=el('button','pipe run'); pr.appendChild(el('i','dot')); pr.appendChild(el('span',null,ps));
+    pr.title='Show running jobs';
+    pr.addEventListener('click',function(e){ e.stopPropagation(); toggleJobsPopover(mr,pr,'running'); });
+    tags.appendChild(pr);
+  }
   else if(ps==='success'){ var po=el('span','pipe ok'); po.title='pipeline passed'; po.appendChild(el('i','dot')); tags.appendChild(po); }
   if(mr.needs_rebase) tags.appendChild(el('span','tag warn','rebase'));
+  if(mr.new_comment) tags.appendChild(el('span','tag warn','new comment'));
   if(mr.needs_re_review) tags.appendChild(el('span','tag warn','re-review'));
   else if(mr.approved) tags.appendChild(el('span','tag ok','approved'));
   else if(mr.approvals_left) tags.appendChild(el('span','tag muted','awaiting approval'));
@@ -860,11 +936,19 @@ function rowEl(mr,g,opts){
   var who=el('div','who'+(isBot?' bot':''), mr.author||'—');
   who.title = (mr.author||'') + (g.kind==='author' && mr._project ? ' · '+mr._project : '');
   if(g.kind==='author' && mr._project){ who.textContent = short(mr._project).last; who.classList.remove('bot'); }
-  r.appendChild(who);
 
   var when=el('div','when',ago(mr.updated_at)); when.title=new Date(mr.updated_at).toLocaleString();
   when.dataset.at=mr.updated_at;
-  r.appendChild(when);
+
+  if(viewMode==='grid'){
+    var meta=el('div','row-meta');
+    meta.appendChild(who);
+    meta.appendChild(when);
+    r.appendChild(meta);
+  }else{
+    r.appendChild(who);
+    r.appendChild(when);
+  }
 
   var acts=el('div','acts');
   var isFavMr=isMrFavorited(mr.web_url);
@@ -932,24 +1016,29 @@ function closeJobsPopover(){ if(jobsPopoverEl) jobsPopoverEl.remove(); jobsPopov
 document.addEventListener('click',function(e){ if(jobsPopoverEl && !jobsPopoverEl.contains(e.target)) closeJobsPopover(); });
 document.addEventListener('keydown',function(e){ if(e.key==='Escape') closeJobsPopover(); });
 
-function toggleJobsPopover(mr,anchor){
+function toggleJobsPopover(mr,anchor,kind){
   if(jobsPopoverFor===anchor){ closeJobsPopover(); return; }
   closeJobsPopover();
+  kind = kind||'failed';
+  var scope = kind==='running' ? 'running,pending,created' : 'failed';
   var pid = mr.project_id!=null ? mr.project_id : encodeURIComponent(mr._project||mr.project||'');
   var box=el('div','job-popover'); box.textContent='Loading…';
   var r=anchor.getBoundingClientRect();
   box.style.top=(r.bottom+6)+'px'; box.style.left=r.left+'px';
   document.body.appendChild(box);
   jobsPopoverEl=box; jobsPopoverFor=anchor;
-  fetch('/api/pipelines/'+pid+'/'+mr.pipeline.id+'/jobs').then(function(res){ return res.json(); }).then(function(jobs){
+  fetch('/api/pipelines/'+pid+'/'+mr.pipeline.id+'/jobs?scope='+scope).then(function(res){ return res.json(); }).then(function(jobs){
     if(jobsPopoverEl!==box) return;
     box.textContent='';
-    box.appendChild(el('h4',null,'Failed jobs'));
-    if(!jobs.length || jobs.error){ box.appendChild(el('div','empty','No failed job details.')); return; }
+    box.appendChild(el('h4',null,kind==='running'?'Running jobs':'Failed jobs'));
+    if(!jobs.length || jobs.error){ box.appendChild(el('div','empty',kind==='running'?'No running job details.':'No failed job details.')); return; }
     jobs.forEach(function(j){
       var row=el('div','job-row');
       var link=el('a',null,j.name); link.href=j.web_url; link.target='_blank'; link.rel='noopener';
       row.appendChild(link);
+      var durText = j.status==='running' && j.started_at ? ago(j.started_at)
+                  : j.duration ? Math.round(j.duration)+'s' : null;
+      if(durText) row.appendChild(el('span','job-dur',durText));
       var jcb=el('button','copy'); jcb.title='Copy job link'; jcb.appendChild(icon(I.copy,'1.1'));
       jcb.addEventListener('click',function(){ copy(j.web_url,jcb); });
       row.appendChild(jcb);
@@ -1022,6 +1111,19 @@ $('#sortCreator').addEventListener('click',function(){ setSort('creator'); });
 $('#sortPriority').setAttribute('aria-pressed', String(sortMode==='priority'));
 $('#sortDate').setAttribute('aria-pressed', String(sortMode==='date'));
 $('#sortCreator').setAttribute('aria-pressed', String(sortMode==='creator'));
+
+/* ── view toggle ───────────────────────────────────────── */
+function setView(v){
+  viewMode=v; localStorage.setItem(LS_VIEW,v);
+  $('#viewList').setAttribute('aria-pressed', String(v==='list'));
+  $('#viewGrid').setAttribute('aria-pressed', String(v==='grid'));
+  render();
+}
+$('#viewList').addEventListener('click',function(){ setView('list'); });
+$('#viewGrid').addEventListener('click',function(){ setView('grid'); });
+$('#viewList').setAttribute('aria-pressed', String(viewMode==='list'));
+$('#viewGrid').setAttribute('aria-pressed', String(viewMode==='grid'));
+document.body.classList.toggle('view-grid', viewMode==='grid');
 
 /* ── clocks ────────────────────────────────────────────── */
 setInterval(function(){
