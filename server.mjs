@@ -72,6 +72,10 @@ async function fetchProjectMrList(projectPath) {
 // ourselves. Lost on restart; acceptable since the app is meant to stay running.
 const lastApproved = new Map();
 
+// ponytail: same trick as lastApproved — remember each MR's note count so we
+// can flag "new comment since last poll" instead of just "has comments".
+const lastNoteCount = new Map();
+
 // ponytail: per-refresh cache — several MRs usually share a project, no need
 // to ask GitLab "is this archived?" once per MR when once per project will do.
 const archivedCache = new Map();
@@ -96,6 +100,10 @@ async function fetchDetail(mr) {
   const needsReReview = wasApproved === true && approvals.approved === false;
   lastApproved.set(key, approvals.approved);
 
+  const prevNoteCount = lastNoteCount.get(key);
+  const newComment = prevNoteCount !== undefined && detail.user_notes_count > prevNoteCount;
+  lastNoteCount.set(key, detail.user_notes_count);
+
   const needsRebase = detail.detailed_merge_status === "need_rebase";
   const pipeline = detail.head_pipeline
     ? { id: detail.head_pipeline.id, status: detail.head_pipeline.status, web_url: detail.head_pipeline.web_url }
@@ -116,8 +124,10 @@ async function fetchDetail(mr) {
     approvals_left: approvals.approvals_left,
     needs_rebase: needsRebase,
     needs_re_review: needsReReview,
+    new_comment: newComment,
+    comment_count: detail.user_notes_count,
     pipeline,
-    urgent: Boolean(pipelineFailed || needsRebase || needsReReview),
+    urgent: Boolean(pipelineFailed || needsRebase || needsReReview || newComment),
   };
 }
 
@@ -220,6 +230,7 @@ async function fetchMergedWatch(mrUrl) {
   const entry = {
     web_url: detail.web_url,
     title: detail.title,
+    iid: detail.iid,
     project: parsed.path,
     project_id: detail.project_id,
     updated_at: detail.merged_at || detail.closed_at || detail.updated_at,
@@ -265,6 +276,32 @@ const server = createServer(async (req, res) => {
 
     res.writeHead(200, { "Content-Type": "application/json" });
     res.end(JSON.stringify({ ...cache, mergedWatched, warnings: [...cache.warnings, ...mergedWatchErrors] }));
+    return;
+  }
+
+  const jobsMatch = url.pathname.match(/^\/api\/pipelines\/(\d+)\/(\d+)\/jobs$/);
+  if (jobsMatch && req.method === "GET") {
+    const [, projectId, pipelineId] = jobsMatch;
+    const scopes = (url.searchParams.get("scope") || "failed").split(",");
+    const scopeQuery = scopes.map((s) => `scope[]=${s}`).join("&");
+    try {
+      const jobs = await glabApi(`projects/${projectId}/pipelines/${pipelineId}/jobs?${scopeQuery}&per_page=50`);
+      res.writeHead(200, { "Content-Type": "application/json" });
+      res.end(
+        JSON.stringify(
+          (jobs || []).map((j) => ({
+            name: j.name,
+            web_url: j.web_url,
+            status: j.status,
+            started_at: j.started_at,
+            duration: j.duration,
+          })),
+        ),
+      );
+    } catch (err) {
+      res.writeHead(500, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ error: err.message }));
+    }
     return;
   }
 
