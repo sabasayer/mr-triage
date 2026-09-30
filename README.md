@@ -25,7 +25,7 @@ Config lives in `~/.mr-triage/`, created on first run:
   copy [`repos.json.example`](repos.json.example) to get started. Entries
   can be a plain project path, or `{ "path": "...", "short": "XX" }` to
   override the group's avatar letter(s) — handy when several repos share a
-  prefix (e.g. everything starting with `xds-`) and the auto-derived initial
+  prefix (e.g. everything starting with `webapp-`) and the auto-derived initial
   collides.
 - `tasks.json` — the Tasks tab's data. Written by starring an MR in the UI,
   or by the `track-work` skill below; you shouldn't need to hand-edit it.

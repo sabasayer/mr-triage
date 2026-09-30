@@ -76,7 +76,7 @@ async function migrateLegacyReposFile() {
 }
 
 // ponytail: entries can be a plain path string, or {path, short} when the
-// auto-derived avatar letter collides (e.g. everything starting with "xds-")
+// auto-derived avatar letter collides (e.g. everything starting with "webapp-")
 async function myRepos() {
   try {
     const raw = await readFile(REPOS_FILE, "utf8");
