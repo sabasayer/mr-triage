@@ -1,9 +1,39 @@
 {
   "name": "mr-triage",
   "version": "0.1.0",
-  "private": true,
+  "description": "A local GitLab MR dashboard and task tracker — replaces manually checking GitLab's MR page and keeps a todo list of work in progress from start to shipped.",
+  "license": "MIT",
+  "author": "Salih Sayer",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/sabasayer/mr-triage.git"
+  },
+  "homepage": "https://github.com/sabasayer/mr-triage#readme",
+  "bugs": {
+    "url": "https://github.com/sabasayer/mr-triage/issues"
+  },
+  "keywords": [
+    "gitlab",
+    "merge-request",
+    "dashboard",
+    "task-tracker"
+  ],
   "type": "module",
+  "bin": {
+    "mr-triage": "server.mjs"
+  },
+  "files": [
+    "server.mjs",
+    "public"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
   "scripts": {
-    "start": "node server.mjs"
+    "start": "node server.mjs",
+    "test": "node test-tasks.mjs"
   }
 }
