@@ -1,8 +1,9 @@
 import { createServer } from "node:http";
 import { execFile } from "node:child_process";
-import { readFile } from "node:fs/promises";
+import { readFile, writeFile, mkdir } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { dirname, join, extname } from "node:path";
+import { homedir } from "node:os";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const PORT = process.env.PORT || 4931;
@@ -116,6 +117,7 @@ async function fetchDetail(mr) {
     iid: mr.iid,
     title: mr.title,
     web_url: mr.web_url,
+    source_branch: detail.source_branch,
     author: mr.author?.username,
     draft: mr.draft,
     updated_at: mr.updated_at,
@@ -210,44 +212,149 @@ async function refresh() {
   }
 }
 
-// Once a favorited MR merges it drops out of the state=opened feed entirely.
-// "Watch it" means: keep looking it up directly by iid (works for any
-// state), and once merged, find the pipeline GitLab ran against the merge
-// commit on the target branch — that's the deploy/release pipeline, not the
-// MR's own (now-irrelevant) CI pipeline.
 function parseMrUrl(mrUrl) {
   const m = /^https:\/\/gitlab\.com\/(.+)\/-\/merge_requests\/(\d+)/.exec(mrUrl);
   return m ? { path: m[1], iid: m[2] } : null;
 }
 
-async function fetchMergedWatch(mrUrl) {
+// A tracked task's MR can be open, merged, or closed. Open: just the normal
+// review-status badges (pipeline/approval/rebase). Merged: find the pipeline
+// GitLab ran against the merge commit on the target branch — that's the
+// deploy/release pipeline, not the MR's own (now-irrelevant) CI pipeline —
+// its success is what "Released" means for the task.
+async function fetchTaskMrStatus(mrUrl) {
   const parsed = parseMrUrl(mrUrl);
   if (!parsed) throw new Error("unrecognized MR URL");
 
   const detail = await glabApi(`projects/${encodeURIComponent(parsed.path)}/merge_requests/${parsed.iid}`);
-  if (detail.state === "opened") return null; // still open — already covered by the normal group list
+  const base = { web_url: detail.web_url, title: detail.title, iid: detail.iid };
 
-  const entry = {
-    web_url: detail.web_url,
-    title: detail.title,
-    iid: detail.iid,
-    project: parsed.path,
-    project_id: detail.project_id,
-    updated_at: detail.merged_at || detail.closed_at || detail.updated_at,
-    merged: detail.state === "merged",
-    closed: detail.state === "closed",
-    pipeline: null,
-  };
-
-  if (entry.merged) {
-    const sha = detail.merge_commit_sha || detail.squash_commit_sha || detail.sha;
-    if (sha) {
-      const pipelines = await glabApi(`projects/${detail.project_id}/pipelines?sha=${sha}&per_page=5`);
-      const match = (pipelines || []).find((p) => p.ref === detail.target_branch) ?? (pipelines || [])[0];
-      if (match) entry.pipeline = { id: match.id, status: match.status, web_url: match.web_url };
-    }
+  if (detail.state === "opened") {
+    const approvals = await glabApi(`projects/${detail.project_id}/merge_requests/${detail.iid}/approvals`);
+    const pipeline = detail.head_pipeline
+      ? { id: detail.head_pipeline.id, status: detail.head_pipeline.status, web_url: detail.head_pipeline.web_url }
+      : null;
+    return {
+      ...base,
+      merged: false,
+      pipeline,
+      approved: approvals.approved,
+      approvals_left: approvals.approvals_left,
+      needs_rebase: detail.detailed_merge_status === "need_rebase",
+    };
   }
-  return entry;
+
+  if (detail.state !== "merged") return { ...base, merged: false, closed: true };
+
+  let pipeline = null;
+  const sha = detail.merge_commit_sha || detail.squash_commit_sha || detail.sha;
+  if (sha) {
+    const pipelines = await glabApi(`projects/${detail.project_id}/pipelines?sha=${sha}&per_page=5`);
+    const match = (pipelines || []).find((p) => p.ref === detail.target_branch) ?? (pipelines || [])[0];
+    if (match) pipeline = { id: match.id, status: match.status, web_url: match.web_url };
+  }
+  return { ...base, merged: true, pipeline };
+}
+
+// ── task tracking ──────────────────────────────────────────
+// Tasks live outside the repo, keyed by an install-independent path, so a
+// globally-installed `track-work` skill can find them regardless of where
+// mr-triage itself is checked out.
+const TASKS_FILE = join(homedir(), ".mr-triage", "tasks.json");
+
+async function loadTasks() {
+  try {
+    return JSON.parse(await readFile(TASKS_FILE, "utf8"));
+  } catch {
+    return [];
+  }
+}
+
+async function saveTasks(tasks) {
+  await mkdir(dirname(TASKS_FILE), { recursive: true });
+  await writeFile(TASKS_FILE, JSON.stringify(tasks, null, 2));
+}
+
+function taskId(repo, branch) {
+  return `${repo}#${branch}`;
+}
+
+async function upsertTask({ repo, branch, title, linear_url, mr_url }) {
+  if (!repo || !branch) throw new Error("repo and branch are required");
+  const tasks = await loadTasks();
+  const id = taskId(repo, branch);
+  const now = new Date().toISOString();
+  let task = tasks.find((t) => t.id === id);
+  if (!task) {
+    task = {
+      id, repo, branch,
+      title: title || branch,
+      linear_url: linear_url || null,
+      mr_url: mr_url || null,
+      state: mr_url ? "in_review" : "working",
+      created_at: now, updated_at: now,
+    };
+    tasks.push(task);
+  } else {
+    if (title) task.title = title;
+    if (linear_url) task.linear_url = linear_url;
+    if (mr_url) {
+      task.mr_url = mr_url;
+      if (task.state === "working") task.state = "in_review";
+    }
+    task.updated_at = now;
+  }
+  await saveTasks(tasks);
+  return task;
+}
+
+const TASK_STATES = ["working", "in_review", "released", "testing", "done"];
+async function transitionTask(id, state) {
+  if (!TASK_STATES.includes(state)) throw new Error(`unknown state: ${state}`);
+  const tasks = await loadTasks();
+  const task = tasks.find((t) => t.id === id);
+  if (!task) throw new Error("task not found");
+  task.state = state;
+  task.updated_at = new Date().toISOString();
+  await saveTasks(tasks);
+  return task;
+}
+
+// ponytail: live GitLab status per in-review task (pipeline/approval, plus
+// the merge+release check) is too slow to compute inside a request — each
+// task costs a couple of sequential `glab` process spawns. Same fix as the
+// MR list: a background timer refreshes a cache; GET /api/tasks just reads
+// tasks.json (fast) and re-attaches whatever the cache last found.
+const taskLiveStatus = new Map(); // task id -> mr_status
+
+async function refreshTaskLiveStatus() {
+  const tasks = await loadTasks();
+  const inReview = tasks.filter((t) => t.state === "in_review" && t.mr_url);
+  const statuses = await Promise.all(
+    inReview.map((t) => fetchTaskMrStatus(t.mr_url).then(
+      (status) => ({ ok: true, status }),
+      () => ({ ok: false }),
+    )),
+  );
+
+  const releasedIds = [];
+  inReview.forEach((t, i) => {
+    const s = statuses[i];
+    if (!s.ok) return;
+    taskLiveStatus.set(t.id, s.status);
+    if (s.status.merged && s.status.pipeline && s.status.pipeline.status === "success") releasedIds.push(t.id);
+  });
+
+  if (releasedIds.length) {
+    const now = new Date().toISOString();
+    tasks.forEach((t) => { if (releasedIds.includes(t.id)) { t.state = "released"; t.updated_at = now; } });
+    await saveTasks(tasks);
+  }
+}
+
+async function tasksWithLiveStatus() {
+  const tasks = await loadTasks();
+  return tasks.map((t) => (taskLiveStatus.has(t.id) ? { ...t, mr_status: taskLiveStatus.get(t.id) } : t));
 }
 
 const MIME = { ".html": "text/html", ".js": "text/javascript", ".css": "text/css" };
@@ -256,26 +363,51 @@ const server = createServer(async (req, res) => {
   const url = new URL(req.url, "http://localhost");
 
   if (url.pathname === "/api/mrs") {
-    let favUrls = [];
-    try {
-      favUrls = JSON.parse(url.searchParams.get("favMrs") || "[]");
-    } catch {
-      favUrls = [];
-    }
-    const openUrls = new Set(cache.groups.flatMap((g) => g.mrs.map((m) => m.web_url)));
-    const toWatch = favUrls.filter((u) => !openUrls.has(u));
-
-    const results = await Promise.all(
-      toWatch.map((u) => fetchMergedWatch(u).then(
-        (entry) => ({ ok: true, entry }),
-        (err) => ({ ok: false, url: u, error: err.message }),
-      )),
-    );
-    const mergedWatched = results.filter((r) => r.ok && r.entry).map((r) => r.entry);
-    const mergedWatchErrors = results.filter((r) => !r.ok).map((r) => `${r.url}: ${r.error}`);
-
     res.writeHead(200, { "Content-Type": "application/json" });
-    res.end(JSON.stringify({ ...cache, mergedWatched, warnings: [...cache.warnings, ...mergedWatchErrors] }));
+    res.end(JSON.stringify(cache));
+    return;
+  }
+
+  if (url.pathname === "/api/tasks" && req.method === "GET") {
+    try {
+      const tasks = await tasksWithLiveStatus();
+      res.writeHead(200, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ tasks }));
+    } catch (err) {
+      res.writeHead(500, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ error: err.message }));
+    }
+    return;
+  }
+
+  if (url.pathname === "/api/tasks" && req.method === "POST") {
+    let body = "";
+    for await (const chunk of req) body += chunk;
+    try {
+      const task = await upsertTask(JSON.parse(body || "{}"));
+      refreshTaskLiveStatus();
+      res.writeHead(200, { "Content-Type": "application/json" });
+      res.end(JSON.stringify(task));
+    } catch (err) {
+      res.writeHead(400, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ error: err.message }));
+    }
+    return;
+  }
+
+  const taskStateMatch = url.pathname.match(/^\/api\/tasks\/([^/]+)\/state$/);
+  if (taskStateMatch && req.method === "POST") {
+    let body = "";
+    for await (const chunk of req) body += chunk;
+    try {
+      const { state } = JSON.parse(body || "{}");
+      const task = await transitionTask(decodeURIComponent(taskStateMatch[1]), state);
+      res.writeHead(200, { "Content-Type": "application/json" });
+      res.end(JSON.stringify(task));
+    } catch (err) {
+      res.writeHead(400, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ error: err.message }));
+    }
     return;
   }
 
@@ -333,4 +465,6 @@ const server = createServer(async (req, res) => {
 
 refresh();
 setInterval(refresh, POLL_MS);
+refreshTaskLiveStatus();
+setInterval(refreshTaskLiveStatus, POLL_MS);
 server.listen(PORT, () => console.log(`mr-triage → http://localhost:${PORT}`));

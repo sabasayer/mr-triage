@@ -181,16 +181,10 @@ button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
 .row.quiet{opacity:.62}
 .row.quiet:hover{opacity:1}
 
-.grip{flex:none;cursor:grab;color:var(--text-faint);font-size:12px;padding:0 1px;user-select:none}
-.drop-end{height:10px}
-.drop-end.over{height:10px;background:var(--accent-soft);border-top:2px solid var(--accent)}
-.grip:active{cursor:grabbing}
-.row.dragging{opacity:.35}
 .rel{flex:none;width:9px;height:9px;border-radius:50%;box-sizing:border-box}
 .rel.authored{background:var(--green)}
 .rel.reviewing{background:transparent;border:2px solid var(--blue)}
 .rel.other{background:transparent;border:1px solid var(--line-strong)}
-.rel.merged{background:var(--ok)}
 
 .main{flex:1 1 auto;min-width:0;display:flex;align-items:center;gap:7px}
 .title{
@@ -329,11 +323,35 @@ svg{display:block}
   }
   body.view-grid .acts button{opacity:.38}
   body.view-grid .row:hover .acts button{opacity:1}
-  body.view-grid .drop-end{grid-column:1/-1}
 }
 @media (max-width:899px){
   .viewToggle{display:none}
 }
+
+/* ── tasks tab ─────────────────────────────────────────── */
+.taskcards{display:flex;flex-direction:column;gap:8px}
+.taskcard{
+  background:var(--panel);border:1px solid var(--line-strong);border-radius:10px;
+  padding:10px 12px;box-shadow:var(--shadow);
+  display:flex;flex-direction:column;gap:6px;
+}
+.taskcard-top{display:flex;align-items:center;gap:8px}
+.taskcard .title{font-weight:600;font-size:13.5px}
+.statebadge{font-size:10.5px;font-weight:750;letter-spacing:.04em;text-transform:uppercase;padding:2px 7px;border-radius:999px;flex:none}
+.statebadge.working{color:var(--text-dim);background:var(--chip)}
+.statebadge.in_review{color:var(--blue);background:rgba(77,97,229,.12)}
+.statebadge.released{color:var(--ok);background:rgba(14,158,105,.12)}
+.statebadge.testing{color:var(--purple);background:rgba(128,77,161,.12)}
+.statebadge.done{color:var(--text-faint);background:var(--chip)}
+.taskcard-meta{font-size:11.5px;color:var(--text-faint);display:flex;gap:8px;flex-wrap:wrap}
+.taskcard-meta a{color:inherit}
+.taskcard-actions{display:flex;gap:6px;margin-left:auto}
+.taskcard-actions button{
+  font-size:11.5px;font-weight:650;padding:3px 9px;border-radius:6px;
+  background:var(--accent);color:#fff;
+}
+.taskcard-actions button.secondary{background:var(--chip);color:var(--text)}
+.showdone{font-size:11.5px;color:var(--text-faint);display:flex;align-items:center;gap:5px;margin-bottom:10px}
 </style>
 </head>
 <body>
@@ -343,6 +361,10 @@ svg{display:block}
       <span class="dots"><i></i><i></i><i></i></span>
       <b>MR Triage</b>
       <span class="alarm" id="alarm"><span class="pulse"></span><span id="alarmText"></span></span>
+    </div>
+    <div class="seg" role="group" aria-label="Tab">
+      <button id="tabMrs" aria-pressed="true">MRs</button>
+      <button id="tabTasks" aria-pressed="false">Tasks</button>
     </div>
     <div class="seg" role="group" aria-label="Group by">
       <button id="byRepo" aria-pressed="true">Repo</button>
@@ -368,9 +390,12 @@ svg{display:block}
   </header>
 
   <div id="warnings"></div>
-  <div id="hiddenBar"></div>
-  <div id="watched"></div>
-  <main id="list"></main>
+  <div id="mrsPanel">
+    <div id="hiddenBar"></div>
+    <div id="watched"></div>
+    <main id="list"></main>
+  </div>
+  <div id="tasksPanel" hidden></div>
 </div>
 
 <script>
@@ -393,35 +418,6 @@ function toggleFavorite(project){
   render();
 }
 
-// ponytail: an ordered array, not a Set — drag-to-reorder needs a position
-// to mean something, and the persisted shape (JSON array) hasn't changed
-var LS_FAV_MRS='wf.favMrs';
-var favMrs = [];
-try{ var f=JSON.parse(localStorage.getItem(LS_FAV_MRS)); if(Array.isArray(f)) favMrs=f; }catch(e){}
-function isMrFavorited(url){ return favMrs.indexOf(url)>=0; }
-function saveFavMrs(){ localStorage.setItem(LS_FAV_MRS, JSON.stringify(favMrs)); }
-function toggleFavoriteMr(url){
-  var i=favMrs.indexOf(url);
-  if(i>=0) favMrs.splice(i,1); else favMrs.push(url);
-  saveFavMrs();
-  render();
-}
-// targetUrl null means "drop past the last row" — always to the very end.
-// after=true inserts below the target row instead of above it, so dropping
-// on the bottom half of the last row (or the empty space below it) actually
-// reaches the last position instead of landing just above it.
-function reorderFavMrs(draggedUrl,targetUrl,after){
-  if(draggedUrl===targetUrl) return;
-  var i=favMrs.indexOf(draggedUrl);
-  if(i<0) return;
-  favMrs.splice(i,1);
-  if(targetUrl==null){ favMrs.push(draggedUrl); saveFavMrs(); render(); return; }
-  var j=favMrs.indexOf(targetUrl);
-  if(j<0) j=favMrs.length; else if(after) j+=1;
-  favMrs.splice(j, 0, draggedUrl);
-  saveFavMrs();
-  render();
-}
 var LS_HIDDEN='wf.hiddenAuthors';
 var hiddenAuthors = new Set();
 try{ (JSON.parse(localStorage.getItem(LS_HIDDEN))||[]).forEach(function(k){hiddenAuthors.add(k);}); }catch(e){}
@@ -433,8 +429,9 @@ function toggleHiddenAuthor(author){
 }
 function visible(mr){ return !hiddenAuthors.has(mr.author); }
 
-var data=null, fetchedAt=null, fetchError=null, demo=false, tickTimer=null, mergedWatched=[];
+var data=null, fetchedAt=null, fetchError=null, demo=false, tickTimer=null;
 var seenGroups = new Set();   // groups we've already applied default-collapse to
+var tasks=[], tasksLoaded=false, activeTab = localStorage.getItem('wf.tab')==='tasks' ? 'tasks' : 'mrs';
 
 var BOT=/bot|renovate|dependabot/i;
 var $=function(s){return document.querySelector(s);};
@@ -443,8 +440,9 @@ var $=function(s){return document.querySelector(s);};
 var POLL_MS=15000, nextPollAt=Date.now()+POLL_MS;
 function load(){
   nextPollAt=Date.now()+POLL_MS;
+  loadTasks();
   if(demo){ apply(DEMO_DATA); return; }
-  fetch('/api/mrs?favMrs='+encodeURIComponent(JSON.stringify(favMrs)),{headers:{'Accept':'application/json'}})
+  fetch('/api/mrs',{headers:{'Accept':'application/json'}})
     .then(function(r){
       if(r.status===404){ demo=true; throw {demo:true}; }
       if(!r.ok) throw new Error('HTTP '+r.status);
@@ -457,27 +455,33 @@ function load(){
       render();
     });
 }
-// A merged/closed favorited MR arrives from the server as a smaller,
-// differently-shaped record — reshape it to look like a normal MR object so
-// rowEl/checkTransitions/sortRows don't need a second code path for it.
-function normalizeMergedEntry(e){
-  return {
-    project:e.project, project_id:e.project_id, iid:e.iid||null,
-    title:e.title, web_url:e.web_url, author:null, draft:false,
-    updated_at:e.updated_at, merge_status:null, approved:null, approvals_left:0,
-    needs_rebase:false, needs_re_review:false, pipeline:e.pipeline,
-    urgent:!!(e.pipeline && (e.pipeline.status==='failed'||e.pipeline.status==='canceled')),
-    relationship:'merged', merged:e.merged, closed:e.closed, _project:e.project
-  };
-}
 
 function apply(d){
   data=d; fetchError=d.error||null;
   fetchedAt = d.fetchedAt ? new Date(d.fetchedAt) : new Date();
-  mergedWatched = (d.mergedWatched||[]).map(normalizeMergedEntry);
-  var mergedAsGroups = mergedWatched.map(function(mr){ return {project:mr.project, mrs:[mr]}; });
-  checkTransitions((d.groups||[]).concat(mergedAsGroups));
+  checkTransitions(d.groups||[]);
   render();
+}
+
+function loadTasks(){
+  if(demo) return Promise.resolve();
+  return fetch('/api/tasks',{headers:{'Accept':'application/json'}})
+    .then(function(r){ return r.json(); })
+    .then(function(d){ tasks=d.tasks||[]; tasksLoaded=true; if(activeTab==='tasks') renderTasks(); })
+    .catch(function(){});
+}
+
+function isTracked(mrUrl){ return tasks.some(function(t){ return t.mr_url===mrUrl; }); }
+function trackMr(mr){
+  fetch('/api/tasks',{
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({ repo: mr.project || mr._project, branch: mr.source_branch || ('mr-'+mr.iid), title: mr.title, mr_url: mr.web_url })
+  }).then(loadTasks).then(render);
+}
+function transitionTask(id,state){
+  fetch('/api/tasks/'+encodeURIComponent(id)+'/state',{
+    method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({state:state})
+  }).then(loadTasks).then(render);
 }
 
 /* ── notifications ─────────────────────────────────────── */
@@ -702,19 +706,6 @@ var I={
 };
 
 /* ── grouping ──────────────────────────────────────────── */
-function buildWatchedMrs(){
-  if(!data) return [];
-  var byUrl={};
-  (data.groups||[]).forEach(function(g){
-    g.mrs.forEach(function(mr){ byUrl[mr.web_url]=Object.assign({},mr,{_project:g.project}); });
-  });
-  mergedWatched.forEach(function(mr){ byUrl[mr.web_url]=mr; });
-  // manual drag order wins here, not sortRows — that's the whole point of favoriting individual MRs
-  var ordered=[];
-  favMrs.forEach(function(url){ if(byUrl[url]) ordered.push(byUrl[url]); });
-  return ordered;
-}
-
 function buildWatched(){
   if(!data||!data.groups) return [];
   return data.groups
@@ -762,11 +753,6 @@ function render(){
   renderStatus(); renderWarnings(); renderHidden();
 
   var watched=$('#watched'); watched.textContent='';
-  var watchedMrs=buildWatchedMrs();
-  if(watchedMrs.length){
-    watched.appendChild(el('div','section-label','★ Followed MRs'));
-    watched.appendChild(groupEl({key:'pinned-mrs',label:'Followed MRs',kind:'author',short:'MR',bot:false,mrs:watchedMrs},{pinned:true}));
-  }
   var watchedGroups=buildWatched();
   if(watchedGroups.length){
     watched.appendChild(el('div','section-label','★ Watched repos'));
@@ -784,7 +770,7 @@ function render(){
 
   if(!groups.length){
     var e=el('div','empty'); e.appendChild(el('b',null,'All clear'));
-    e.appendChild(document.createTextNode(fetchError?'Nothing loaded.':((watchedGroups.length||watchedMrs.length)?'Nothing else open.':'No open merge requests.')));
+    e.appendChild(document.createTextNode(fetchError?'Nothing loaded.':(watchedGroups.length?'Nothing else open.':'No open merge requests.')));
     list.appendChild(e); return;
   }
 
@@ -854,49 +840,21 @@ function groupEl(g,opts){
   d.appendChild(s);
 
   var rows=el('div','rows');
-  var draggableGroup = g.key==='pinned-mrs';
-  g.mrs.forEach(function(mr){ rows.appendChild(rowEl(mr,g,{draggable:draggableGroup})); });
+  g.mrs.forEach(function(mr){ rows.appendChild(rowEl(mr,g)); });
   d.appendChild(rows);
 
-  if(draggableGroup && g.mrs.length){
-    var dropEnd=el('div','drop-end');
-    dropEnd.addEventListener('dragover',function(e){ e.preventDefault(); e.dataTransfer.dropEffect='move'; dropEnd.classList.add('over'); });
-    dropEnd.addEventListener('dragleave',function(){ dropEnd.classList.remove('over'); });
-    dropEnd.addEventListener('drop',function(e){
-      e.preventDefault(); dropEnd.classList.remove('over');
-      reorderFavMrs(e.dataTransfer.getData('text/plain'), null);
-    });
-    d.appendChild(dropEnd);
-  }
   return d;
 }
 
-function rowEl(mr,g,opts){
-  opts=opts||{};
+function rowEl(mr,g){
   var lv=level(mr), isBot=BOT.test(mr.author||'');
   var r=el('div','row '+lv);
   if(mr.draft) r.classList.add('draft');
   if(lv==='ok' && (isBot||mr.draft||mr.relationship==='other')) r.classList.add('quiet');
 
-  if(opts.draggable){
-    var grip=el('span','grip','⠿'); grip.title='Drag to reorder';
-    grip.draggable=true;
-    grip.addEventListener('dragstart',function(e){ e.dataTransfer.effectAllowed='move'; e.dataTransfer.setData('text/plain', mr.web_url); r.classList.add('dragging'); });
-    grip.addEventListener('dragend',function(){ r.classList.remove('dragging'); });
-    r.appendChild(grip);
-    r.addEventListener('dragover',function(e){ e.preventDefault(); e.dataTransfer.dropEffect='move'; });
-    r.addEventListener('drop',function(e){
-      e.preventDefault(); e.stopPropagation();
-      var rect=r.getBoundingClientRect();
-      var after = e.clientY > rect.top + rect.height/2;
-      reorderFavMrs(e.dataTransfer.getData('text/plain'), mr.web_url, after);
-    });
-  }
-
   var rel=el('span','rel '+(mr.relationship||'other'));
   rel.title = mr.relationship==='authored' ? 'You authored this'
             : mr.relationship==='reviewing' ? 'Your review is requested'
-            : mr.relationship==='merged' ? (mr.merged ? 'Merged — watching its release pipeline' : 'Closed without merging')
             : 'Activity in a repo you own';
   r.appendChild(rel);
 
@@ -909,8 +867,6 @@ function rowEl(mr,g,opts){
   main.appendChild(a);
 
   var tags=el('span','tags');
-  if(mr.merged) tags.appendChild(el('span','tag ok','merged'));
-  else if(mr.closed) tags.appendChild(el('span','tag muted','closed'));
   var ps=pstat(mr);
   if(ps==='failed'||ps==='canceled'){
     var pipeBtn=el('button','tag crit',ps==='failed'?'pipeline failed':'pipeline canceled');
@@ -951,10 +907,10 @@ function rowEl(mr,g,opts){
   }
 
   var acts=el('div','acts');
-  var isFavMr=isMrFavorited(mr.web_url);
-  var fb=el('button','fav'+(isFavMr?' on':''), isFavMr?'★':'☆');
-  fb.title=isFavMr?'Unfollow':'Follow this MR';
-  fb.addEventListener('click',function(){ toggleFavoriteMr(mr.web_url); });
+  var tracked=isTracked(mr.web_url);
+  var fb=el('button','fav'+(tracked?' on':''), tracked?'★':'☆');
+  fb.title=tracked?'Tracked as a task':'Track as a task';
+  fb.addEventListener('click',function(){ if(!tracked) trackMr(mr); });
   acts.appendChild(fb);
   if(broken(mr) && mr.pipeline){
     var rb=el('button','retry'); rb.title='Retry pipeline'; rb.setAttribute('aria-label','Retry pipeline');
@@ -966,7 +922,7 @@ function rowEl(mr,g,opts){
   cb.appendChild(icon(I.copy,'1.4'));
   cb.addEventListener('click',function(){ copy(mr.web_url,cb); });
   acts.appendChild(cb);
-  if(mr.author && g.key!=='pinned-mrs'){
+  if(mr.author){
     var hb=el('button','hide','🙈'); hb.title='Hide MRs from '+mr.author;
     hb.addEventListener('click',function(){ toggleHiddenAuthor(mr.author); });
     acts.appendChild(hb);
@@ -1124,6 +1080,99 @@ $('#viewGrid').addEventListener('click',function(){ setView('grid'); });
 $('#viewList').setAttribute('aria-pressed', String(viewMode==='list'));
 $('#viewGrid').setAttribute('aria-pressed', String(viewMode==='grid'));
 document.body.classList.toggle('view-grid', viewMode==='grid');
+
+/* ── tab toggle ────────────────────────────────────────── */
+function setTab(t){
+  activeTab=t; localStorage.setItem('wf.tab',t);
+  $('#tabMrs').setAttribute('aria-pressed', String(t==='mrs'));
+  $('#tabTasks').setAttribute('aria-pressed', String(t==='tasks'));
+  $('#mrsPanel').hidden = t!=='mrs';
+  $('#tasksPanel').hidden = t!=='tasks';
+  if(t==='tasks') renderTasks();
+}
+$('#tabMrs').addEventListener('click',function(){ setTab('mrs'); });
+$('#tabTasks').addEventListener('click',function(){ setTab('tasks'); });
+setTab(activeTab);
+
+/* ── tasks tab ─────────────────────────────────────────── */
+var TASK_STATE_LABEL={working:'Working',in_review:'In Review',released:'Released',testing:'Testing',done:'Done'};
+var showDoneTasks=false;
+
+function taskMrTags(t){
+  var tags=el('span','tags');
+  var s=t.mr_status;
+  if(!s) return tags;
+  var ps=s.pipeline&&s.pipeline.status;
+  if(t.state==='in_review' && s.merged) tags.appendChild(el('span','tag muted','merged, deploying…'));
+  if(t.state==='in_review' && s.merged && (ps==='failed'||ps==='canceled')) tags.appendChild(el('span','tag crit','deploy failed'));
+  if(t.state==='in_review' && !s.merged){
+    if(ps==='failed'||ps==='canceled') tags.appendChild(el('span','tag crit','pipeline failed'));
+    else if(ps==='running'||ps==='pending') tags.appendChild(el('span','tag muted','pipeline running'));
+    else if(ps==='success') tags.appendChild(el('span','tag ok','pipeline passed'));
+    if(s.needs_rebase) tags.appendChild(el('span','tag warn','rebase'));
+    if(s.approved) tags.appendChild(el('span','tag ok','approved'));
+    else if(s.approvals_left) tags.appendChild(el('span','tag muted','awaiting approval'));
+  }
+  return tags;
+}
+
+function taskCard(t){
+  var card=el('div','taskcard');
+  var top=el('div','taskcard-top');
+  top.appendChild(el('span','statebadge '+t.state, TASK_STATE_LABEL[t.state]||t.state));
+  var linkUrl=t.mr_url||t.linear_url;
+  var title;
+  if(linkUrl){ title=el('a','title'); title.href=linkUrl; title.target='_blank'; title.rel='noopener'; title.textContent=t.title; }
+  else title=el('span','title',t.title);
+  top.appendChild(title);
+  card.appendChild(top);
+  card.appendChild(taskMrTags(t));
+
+  var meta=el('div','taskcard-meta');
+  meta.appendChild(el('span',null,t.repo+' · '+t.branch));
+  if(t.linear_url){ var la=el('a',null,'Linear'); la.href=t.linear_url; la.target='_blank'; la.rel='noopener'; meta.appendChild(la); }
+  if(t.mr_url){ var ma=el('a',null,'MR'); ma.href=t.mr_url; ma.target='_blank'; ma.rel='noopener'; meta.appendChild(ma); }
+  var actions=el('div','taskcard-actions');
+  if(t.state==='released'){
+    var toTesting=el('button',null,'Start testing');
+    toTesting.addEventListener('click',function(){ transitionTask(t.id,'testing'); });
+    actions.appendChild(toTesting);
+  }
+  if(t.state==='testing'){
+    var toDone=el('button',null,'Mark done');
+    toDone.addEventListener('click',function(){ transitionTask(t.id,'done'); });
+    actions.appendChild(toDone);
+  }
+  meta.appendChild(actions);
+  card.appendChild(meta);
+  return card;
+}
+
+function renderTasks(){
+  var panel=$('#tasksPanel'); panel.textContent='';
+  var toggle=el('label','showdone');
+  var cb=document.createElement('input'); cb.type='checkbox'; cb.checked=showDoneTasks;
+  cb.addEventListener('change',function(){ showDoneTasks=cb.checked; renderTasks(); });
+  toggle.appendChild(cb);
+  toggle.appendChild(document.createTextNode('Show done'));
+  panel.appendChild(toggle);
+
+  if(!tasksLoaded){
+    panel.appendChild(el('div','empty','Loading…'));
+    return;
+  }
+  var visible=tasks.filter(function(t){ return showDoneTasks || t.state!=='done'; });
+  if(!visible.length){
+    var e=el('div','empty'); e.appendChild(el('b',null,'No tasks tracked'));
+    e.appendChild(document.createTextNode('Star an MR, or start work with the track-work skill.'));
+    panel.appendChild(e); return;
+  }
+  var order=['working','in_review','released','testing','done'];
+  visible.sort(function(a,b){ return order.indexOf(a.state)-order.indexOf(b.state) || new Date(b.updated_at)-new Date(a.updated_at); });
+  var cards=el('div','taskcards');
+  visible.forEach(function(t){ cards.appendChild(taskCard(t)); });
+  panel.appendChild(cards);
+}
 
 /* ── clocks ────────────────────────────────────────────── */
 setInterval(function(){
