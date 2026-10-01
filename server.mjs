@@ -124,6 +124,7 @@ async function fetchDetail(mr) {
     merge_status: detail.detailed_merge_status,
     approved: approvals.approved,
     approvals_left: approvals.approvals_left,
+    has_reviewer: Boolean(detail.reviewers?.length),
     needs_rebase: needsRebase,
     needs_re_review: needsReReview,
     new_comment: newComment,
