@@ -1,3 +1,4 @@
+#!/usr/bin/env node
 import { createServer } from "node:http";
 import { execFile } from "node:child_process";
 import { readFile, writeFile, mkdir } from "node:fs/promises";
@@ -8,6 +9,12 @@ import { homedir } from "node:os";
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const PORT = process.env.PORT || 4931;
 const POLL_MS = 20_000;
+
+// Personal config/state lives outside the package install dir — required
+// once this runs via `npx mr-triage` (a fresh, throwaway cache dir each
+// time) rather than a local clone.
+const CONFIG_DIR = join(homedir(), ".mr-triage");
+const REPOS_FILE = join(CONFIG_DIR, "repos.json");
 
 function glabOnce(args) {
   return new Promise((resolve, reject) => {
@@ -48,11 +55,31 @@ async function whoami() {
   return me;
 }
 
+// One-time carry-over for anyone already running this from a local clone
+// with a repos.json next to server.mjs — after this, REPOS_FILE is the only
+// place it's read from.
+async function migrateLegacyReposFile() {
+  try {
+    await readFile(REPOS_FILE, "utf8");
+    return; // already migrated
+  } catch {
+    // fall through — no file at the new location yet
+  }
+  try {
+    const legacy = await readFile(join(__dirname, "repos.json"), "utf8");
+    await mkdir(CONFIG_DIR, { recursive: true });
+    await writeFile(REPOS_FILE, legacy);
+    console.log(`[mr-triage] migrated repos.json to ${REPOS_FILE}`);
+  } catch {
+    // no legacy file either — nothing to migrate
+  }
+}
+
 // ponytail: entries can be a plain path string, or {path, short} when the
-// auto-derived avatar letter collides (e.g. everything starting with "xds-")
+// auto-derived avatar letter collides (e.g. everything starting with "webapp-")
 async function myRepos() {
   try {
-    const raw = await readFile(join(__dirname, "repos.json"), "utf8");
+    const raw = await readFile(REPOS_FILE, "utf8");
     const entries = JSON.parse(raw);
     return entries.map((e) => (typeof e === "string" ? { path: e, short: null } : { path: e.path, short: e.short ?? null }));
   } catch {
@@ -260,7 +287,7 @@ async function fetchTaskMrStatus(mrUrl) {
 // Tasks live outside the repo, keyed by an install-independent path, so a
 // globally-installed `track-work` skill can find them regardless of where
 // mr-triage itself is checked out.
-const TASKS_FILE = join(homedir(), ".mr-triage", "tasks.json");
+const TASKS_FILE = join(CONFIG_DIR, "tasks.json");
 
 async function loadTasks() {
   try {
@@ -463,6 +490,7 @@ const server = createServer(async (req, res) => {
   }
 });
 
+await migrateLegacyReposFile();
 refresh();
 setInterval(refresh, POLL_MS);
 refreshTaskLiveStatus();

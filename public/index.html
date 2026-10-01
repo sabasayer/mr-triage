@@ -1193,20 +1193,20 @@ setInterval(load,POLL_MS);
 var now=Date.now(), T=function(min){ return new Date(now-min*60000).toISOString(); };
 var DEMO_DATA={
   fetchedAt:new Date(now-8000).toISOString(), error:null,
-  warnings:['founda/application/xds-old: 404 Project Not Found'],
+  warnings:['acme/webapp-old: 404 Project Not Found'],
   groups:[
-    {project:'founda/application/xds-widgets',mrs:[
+    {project:'acme/webapp-widgets',mrs:[
       {title:'fix(widgets): design-review bugs',web_url:'#',author:'salih.sayer',draft:false,updated_at:T(12),relationship:'authored',pipeline:{status:'failed',id:123},project_id:41,needs_rebase:false,needs_re_review:true,urgent:true},
-      {title:'feat(viewer): keyboard shortcuts for series navigation',web_url:'#',author:'m.dekker',draft:false,updated_at:T(48),relationship:'reviewing',pipeline:{status:'success',id:124},project_id:41,needs_rebase:true,needs_re_review:false,urgent:false},
+      {title:'feat(viewer): keyboard shortcuts for list navigation',web_url:'#',author:'m.dekker',draft:false,updated_at:T(48),relationship:'reviewing',pipeline:{status:'success',id:124},project_id:41,needs_rebase:true,needs_re_review:false,urgent:false},
       {title:'chore(deps): update dependency vite to v7.1.2',web_url:'#',author:'renovate-bot',draft:false,updated_at:T(200),relationship:'other',pipeline:{status:'success',id:125},project_id:41,needs_rebase:false,needs_re_review:false,urgent:false}
     ]},
-    {project:'founda/platform/gateway',mrs:[
+    {project:'acme/platform-gateway',mrs:[
       {title:'feat(auth): rotate service credentials without downtime',web_url:'#',author:'salih.sayer',draft:true,updated_at:T(95),relationship:'authored',pipeline:{status:'running',id:210},project_id:12,needs_rebase:false,needs_re_review:false,urgent:false},
       {title:'chore(deps): update node docker tag to v22.18',web_url:'#',author:'renovate-bot',draft:false,updated_at:T(320),relationship:'other',pipeline:{status:'failed',id:211},project_id:12,needs_rebase:false,needs_re_review:false,urgent:false},
-      {title:'refactor: extract HL7 segment parser into shared package',web_url:'#',author:'j.vandenberg',draft:false,updated_at:T(1500),relationship:'other',pipeline:null,project_id:12,needs_rebase:false,needs_re_review:false,urgent:false}
+      {title:'refactor: extract retry logic into shared package',web_url:'#',author:'j.vandenberg',draft:false,updated_at:T(1500),relationship:'other',pipeline:null,project_id:12,needs_rebase:false,needs_re_review:false,urgent:false}
     ]},
-    {project:'founda/application/forindex',mrs:[
-      {title:'fix(index): drop duplicate DICOM study rows on re-ingest',web_url:'#',author:'a.kowalski',draft:false,updated_at:T(6),relationship:'reviewing',pipeline:{status:'success',id:330},project_id:77,needs_rebase:false,needs_re_review:true,urgent:true},
+    {project:'acme/webapp-search',mrs:[
+      {title:'fix(search): drop duplicate rows on re-index',web_url:'#',author:'a.kowalski',draft:false,updated_at:T(6),relationship:'reviewing',pipeline:{status:'success',id:330},project_id:77,needs_rebase:false,needs_re_review:true,urgent:true},
       {title:'chore(deps): update dependency typescript to v5.9',web_url:'#',author:'dependabot',draft:false,updated_at:T(870),relationship:'other',pipeline:{status:'success',id:331},project_id:77,needs_rebase:true,needs_re_review:false,urgent:false}
     ]}
   ]
