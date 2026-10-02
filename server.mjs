@@ -100,10 +100,6 @@ async function fetchProjectMrList(projectPath) {
 // ourselves. Lost on restart; acceptable since the app is meant to stay running.
 const lastApproved = new Map();
 
-// ponytail: same trick as lastApproved — remember each MR's note count so we
-// can flag "new comment since last poll" instead of just "has comments".
-const lastNoteCount = new Map();
-
 // ponytail: per-refresh cache — several MRs usually share a project, no need
 // to ask GitLab "is this archived?" once per MR when once per project will do.
 const archivedCache = new Map();
@@ -128,10 +124,6 @@ async function fetchDetail(mr) {
   const needsReReview = wasApproved === true && approvals.approved === false;
   lastApproved.set(key, approvals.approved);
 
-  const prevNoteCount = lastNoteCount.get(key);
-  const newComment = prevNoteCount !== undefined && detail.user_notes_count > prevNoteCount;
-  lastNoteCount.set(key, detail.user_notes_count);
-
   const needsRebase = detail.detailed_merge_status === "need_rebase";
   const pipeline = detail.head_pipeline
     ? { id: detail.head_pipeline.id, status: detail.head_pipeline.status, web_url: detail.head_pipeline.web_url }
@@ -154,10 +146,10 @@ async function fetchDetail(mr) {
     has_reviewer: Boolean(detail.reviewers?.length),
     needs_rebase: needsRebase,
     needs_re_review: needsReReview,
-    new_comment: newComment,
+    has_unresolved_threads: detail.blocking_discussions_resolved === false,
     comment_count: detail.user_notes_count,
     pipeline,
-    urgent: Boolean(pipelineFailed || needsRebase || needsReReview || newComment),
+    urgent: Boolean(pipelineFailed || needsRebase || needsReReview),
   };
 }
 
