@@ -882,7 +882,7 @@ function rowEl(mr,g){
   }
   else if(ps==='success'){ var po=el('span','pipe ok'); po.title='pipeline passed'; po.appendChild(el('i','dot')); tags.appendChild(po); }
   if(mr.needs_rebase) tags.appendChild(el('span','tag warn','rebase'));
-  if(mr.new_comment) tags.appendChild(el('span','tag warn','new comment'));
+  if(mr.has_unresolved_threads) tags.appendChild(el('span','tag warn','unresolved threads'));
   if(mr.relationship==='authored' && !mr.draft && !mr.has_reviewer) tags.appendChild(el('span','tag warn','no reviewer'));
   if(mr.needs_re_review) tags.appendChild(el('span','tag warn','re-review'));
   else if(mr.approved) tags.appendChild(el('span','tag ok','approved'));
