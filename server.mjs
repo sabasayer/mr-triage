@@ -312,6 +312,8 @@ async function upsertTask({ repo, branch, title, linear_url, mr_url }) {
       linear_url: linear_url || null,
       mr_url: mr_url || null,
       state: mr_url ? "in_review" : "working",
+      tested: false,
+      reviewed: false,
       created_at: now, updated_at: now,
     };
     tasks.push(task);
@@ -335,6 +337,21 @@ async function transitionTask(id, state) {
   const task = tasks.find((t) => t.id === id);
   if (!task) throw new Error("task not found");
   task.state = state;
+  task.updated_at = new Date().toISOString();
+  await saveTasks(tasks);
+  return task;
+}
+
+// Independent of `state` -- a task can be e.g. In Review and already
+// manually tested locally, or Released and already run through
+// review-workspace. One task, several parallel yes/no badges.
+const TASK_FLAGS = ["tested", "reviewed"];
+async function setTaskFlag(id, flag, value) {
+  if (!TASK_FLAGS.includes(flag)) throw new Error(`unknown flag: ${flag}`);
+  const tasks = await loadTasks();
+  const task = tasks.find((t) => t.id === id);
+  if (!task) throw new Error("task not found");
+  task[flag] = Boolean(value);
   task.updated_at = new Date().toISOString();
   await saveTasks(tasks);
   return task;
@@ -422,6 +439,22 @@ const server = createServer(async (req, res) => {
     try {
       const { state } = JSON.parse(body || "{}");
       const task = await transitionTask(decodeURIComponent(taskStateMatch[1]), state);
+      res.writeHead(200, { "Content-Type": "application/json" });
+      res.end(JSON.stringify(task));
+    } catch (err) {
+      res.writeHead(400, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ error: err.message }));
+    }
+    return;
+  }
+
+  const taskFlagMatch = url.pathname.match(/^\/api\/tasks\/([^/]+)\/flag$/);
+  if (taskFlagMatch && req.method === "POST") {
+    let body = "";
+    for await (const chunk of req) body += chunk;
+    try {
+      const { flag, value } = JSON.parse(body || "{}");
+      const task = await setTaskFlag(decodeURIComponent(taskFlagMatch[1]), flag, value);
       res.writeHead(200, { "Content-Type": "application/json" });
       res.end(JSON.stringify(task));
     } catch (err) {

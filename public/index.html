@@ -352,6 +352,13 @@ svg{display:block}
 }
 .taskcard-actions button.secondary{background:var(--chip);color:var(--text)}
 .showdone{font-size:11.5px;color:var(--text-faint);display:flex;align-items:center;gap:5px;margin-bottom:10px}
+.flagbadge{
+  font-size:10.5px;font-weight:650;padding:1px 7px;border-radius:999px;flex:none;
+  color:var(--text-faint);background:var(--chip);border:1px solid var(--line);
+  margin-left:auto;
+}
+.flagbadge+.flagbadge{margin-left:0}
+.flagbadge.on{color:var(--ok);background:rgba(14,158,105,.12);border-color:rgba(14,158,105,.35)}
 </style>
 </head>
 <body>
@@ -481,6 +488,11 @@ function trackMr(mr){
 function transitionTask(id,state){
   fetch('/api/tasks/'+encodeURIComponent(id)+'/state',{
     method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({state:state})
+  }).then(loadTasks).then(render);
+}
+function toggleTaskFlag(id,flag,value){
+  fetch('/api/tasks/'+encodeURIComponent(id)+'/flag',{
+    method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({flag:flag,value:value})
   }).then(loadTasks).then(render);
 }
 
@@ -1126,6 +1138,14 @@ function taskCard(t){
   if(linkUrl){ title=el('a','title'); title.href=linkUrl; title.target='_blank'; title.rel='noopener'; title.textContent=t.title; }
   else title=el('span','title',t.title);
   top.appendChild(title);
+  [['tested','Tested'],['reviewed','Reviewed']].forEach(function(f){
+    var key=f[0], label=f[1];
+    var on=!!t[key];
+    var badge=el('button','flagbadge'+(on?' on':''), (on?'✓ ':'')+label);
+    badge.title=(on?'Mark not ':'Mark ')+label.toLowerCase();
+    badge.addEventListener('click',function(){ toggleTaskFlag(t.id,key,!on); });
+    top.appendChild(badge);
+  });
   card.appendChild(top);
   card.appendChild(taskMrTags(t));
 
