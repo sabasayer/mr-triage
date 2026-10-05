@@ -16,6 +16,11 @@ Released → Testing → Done). It only creates a task and fills in metadata
 (title, Linear URL, MR URL). State moves forward automatically (MR opens,
 MR merges + releases) or manually in the mr-triage UI — never from here.
 
+It *can* set the `tested` and `reviewed` flags — see "Flags" below. These
+are independent of state (a task can be in any state and tested/reviewed
+in any combination), and recording them here is capturing something that
+already happened, not the skill deciding the work is done.
+
 ## Inputs
 
 Take whatever's passed as args. For anything missing, derive or ask:
@@ -48,6 +53,30 @@ If the request fails to connect, mr-triage isn't running locally. Say so
 once — "mr-triage isn't running, so this task wasn't tracked — start it
 with `npx mr-triage`" — and move on; don't treat this as fatal to whatever
 larger flow invoked it, and don't start the server yourself.
+
+## Flags (tested / reviewed)
+
+Set `tested: true` only when the user clearly states *they themselves*
+verified the change — e.g. ran the `dev:offline` server and checked it in
+the browser, or otherwise manually confirmed it — not just that "it
+works" in the abstract (that usually means the logic/tests pass, not that
+a human checked it). If it's ambiguous which one they mean, ask rather
+than guess.
+
+Set `reviewed: true` when the user says a review pass (e.g.
+`review-workspace`) has been run against this task's MR.
+
+Never infer either flag from a statement about something else entirely —
+only from the user explicitly confirming that specific step happened.
+
+```bash
+curl -s -X POST "http://localhost:4931/api/tasks/$(node -e 'console.log(encodeURIComponent(process.argv[1]))' "<repo>#<branch>")/flag" \
+  -H 'Content-Type: application/json' \
+  -d '{"flag":"tested","value":true}'
+```
+
+(`reviewed` works the same way, just swap the flag name.) The task id is
+always `<repo>#<branch>` — no need to look it up first.
 
 ## Standalone usage
 
