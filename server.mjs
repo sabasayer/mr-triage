@@ -125,6 +125,7 @@ async function fetchDetail(mr) {
   lastApproved.set(key, approvals.approved);
 
   const needsRebase = detail.detailed_merge_status === "need_rebase";
+  const hasConflicts = Boolean(detail.has_conflicts);
   const pipeline = detail.head_pipeline
     ? { id: detail.head_pipeline.id, status: detail.head_pipeline.status, web_url: detail.head_pipeline.web_url }
     : null;
@@ -145,11 +146,12 @@ async function fetchDetail(mr) {
     approvals_left: approvals.approvals_left,
     has_reviewer: Boolean(detail.reviewers?.length),
     needs_rebase: needsRebase,
+    has_conflicts: hasConflicts,
     needs_re_review: needsReReview,
     has_unresolved_threads: detail.blocking_discussions_resolved === false,
     comment_count: detail.user_notes_count,
     pipeline,
-    urgent: Boolean(pipelineFailed || needsRebase || needsReReview),
+    urgent: Boolean(pipelineFailed || needsRebase || hasConflicts || needsReReview),
   };
 }
 
