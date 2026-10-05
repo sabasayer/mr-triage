@@ -44,9 +44,24 @@ try {
     method: "POST", body: JSON.stringify({ state: "bogus" }),
   }).then((r) => assert.equal(r.status, 400, "unknown state is rejected"));
 
+  assert.equal(created.tested, false, "tested defaults to false");
+  assert.equal(created.reviewed, false, "reviewed defaults to false");
+
+  const tested = await fetch(base + `/api/tasks/${encodeURIComponent(withMr.id)}/flag`, {
+    method: "POST", body: JSON.stringify({ flag: "tested", value: true }),
+  }).then((r) => r.json());
+  assert.equal(tested.tested, true, "tested flag flips independently of state");
+  assert.equal(tested.state, "testing", "flipping a flag doesn't touch state");
+  assert.equal(tested.reviewed, false, "the other flag is untouched");
+
+  await fetch(base + `/api/tasks/${encodeURIComponent(withMr.id)}/flag`, {
+    method: "POST", body: JSON.stringify({ flag: "bogus", value: true }),
+  }).then((r) => assert.equal(r.status, 400, "unknown flag is rejected"));
+
   const stored = JSON.parse(await readFile(join(home, ".mr-triage", "tasks.json"), "utf8"));
   assert.equal(stored.length, 1, "one task on disk, upserted not duplicated");
   assert.equal(stored[0].state, "testing");
+  assert.equal(stored[0].tested, true);
 
   console.log("ok — tasks endpoints behave");
 } finally {
