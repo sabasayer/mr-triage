@@ -881,6 +881,7 @@ function rowEl(mr,g){
     tags.appendChild(pr);
   }
   else if(ps==='success'){ var po=el('span','pipe ok'); po.title='pipeline passed'; po.appendChild(el('i','dot')); tags.appendChild(po); }
+  if(mr.has_conflicts) tags.appendChild(el('span','tag warn','conflicts'));
   if(mr.needs_rebase) tags.appendChild(el('span','tag warn','rebase'));
   if(mr.has_unresolved_threads) tags.appendChild(el('span','tag warn','unresolved threads'));
   if(mr.relationship==='authored' && !mr.draft && !mr.has_reviewer) tags.appendChild(el('span','tag warn','no reviewer'));
