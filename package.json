@@ -1,6 +1,6 @@
 {
   "name": "mr-triage",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "description": "A local GitLab MR dashboard and task tracker — replaces manually checking GitLab's MR page and keeps a todo list of work in progress from start to shipped.",
   "license": "MIT",
   "author": "Salih Sayer",
