@@ -629,6 +629,10 @@ updateNotifyBtn();
   });
 })();
 
+function bulletList(lines){
+  return lines.length>1 ? lines.map(function(l){ return '• '+l; }).join('\n') : lines.join('\n');
+}
+
 /* ── copy waiting-for-approval MRs ───────────────────────── */
 (function(){
   var panel=$('#waitingPanel'), btn=$('#waitingBtn');
@@ -661,9 +665,8 @@ updateNotifyBtn();
     });
     var copyBtn=el('button','copyBtn','Copy selected');
     copyBtn.addEventListener('click',function(){
-      var text=mrs.filter(function(mr){ return checkedUrls.has(mr.web_url); })
-        .map(function(mr){ return mr.repo+' '+(mr.iid?'!'+mr.iid+' ':'')+mr.title+' — '+mr.web_url; })
-        .join('\n');
+      var text=bulletList(mrs.filter(function(mr){ return checkedUrls.has(mr.web_url); })
+        .map(function(mr){ return mr.repo+' '+(mr.iid?'!'+mr.iid+' ':'')+mr.title+' — '+mr.web_url; }));
       copyText(text,copyBtn);
     });
     panel.appendChild(copyBtn);
@@ -1036,7 +1039,7 @@ function toggleJobsPopover(mr,anchor,kind){
     });
     var copyAllBtn=el('button','copyBtn','Copy all links');
     copyAllBtn.addEventListener('click',function(){
-      var text=jobs.map(function(j){ return j.name+' — '+j.web_url; }).join('\n');
+      var text=bulletList(jobs.map(function(j){ return j.name+' — '+j.web_url; }));
       if(navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(text);
       copyAllBtn.textContent='Copied!'; setTimeout(function(){ copyAllBtn.textContent='Copy all links'; },1100);
     });
