@@ -1,0 +1,9 @@
+{
+  "name": "mr-triage-mrs",
+  "version": "0.1.0",
+  "description": "/mrs pane listing open MRs and pipeline status from the local mr-triage server",
+  "author": {
+    "name": "Salih Sayer"
+  },
+  "types": "./types/index.d.ts"
+}

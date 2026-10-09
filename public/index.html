@@ -192,6 +192,7 @@ button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
   color:var(--text);font-weight:520;font-size:13px;letter-spacing:-.005em;
 }
 .title:hover{color:var(--accent)}
+.mr-linear{color:var(--purple);font-weight:600;font-variant-numeric:tabular-nums}
 .mr-iid{color:var(--text-dim);font-weight:450;font-variant-numeric:tabular-nums}
 .row.draft .title{color:var(--text-dim);font-weight:450}
 
@@ -431,8 +432,25 @@ try{ (JSON.parse(localStorage.getItem(LS_HIDDEN))||[]).forEach(function(k){hidde
 function toggleHiddenAuthor(author){
   if(!author) return;
   if(hiddenAuthors.has(author)) hiddenAuthors.delete(author); else hiddenAuthors.add(author);
-  localStorage.setItem(LS_HIDDEN, JSON.stringify(Array.from(hiddenAuthors)));
+  saveHiddenAuthors();
   render();
+}
+function saveHiddenAuthors(){
+  var list=Array.from(hiddenAuthors);
+  localStorage.setItem(LS_HIDDEN, JSON.stringify(list));
+  fetch('/api/hidden-authors',{method:'PUT',body:JSON.stringify(list)}).catch(function(){});
+}
+function syncHiddenAuthors(){
+  fetch('/api/hidden-authors').then(function(r){ return r.json(); }).then(function(list){
+    if(!list.length && hiddenAuthors.size){ saveHiddenAuthors(); return; }
+    hiddenAuthors=new Set(list);
+    localStorage.setItem(LS_HIDDEN, JSON.stringify(list));
+    render();
+  }).catch(function(){});
+}
+function linearId(mr){
+  var m=(mr.title||'').match(/\b([A-Z]{2,}-\d+)\b/) || (mr.source_branch||'').match(/^([a-z]{2,}-\d+)-/i);
+  return m ? m[1].toUpperCase() : null;
 }
 function visible(mr){ return !hiddenAuthors.has(mr.author); }
 
@@ -874,6 +892,8 @@ function rowEl(mr,g){
   if(mr.draft) main.appendChild(el('span','tag draft','draft'));
   var a=el('a','title'); a.href=mr.web_url; a.target='_blank'; a.rel='noopener';
   if(mr.iid) a.appendChild(el('span','mr-iid','!'+mr.iid+' '));
+  var lin=linearId(mr);
+  if(lin) a.appendChild(el('span','mr-linear',lin+' '));
   a.appendChild(document.createTextNode(mr.title));
   a.title = (g.kind==='author' && mr._project ? mr._project+' · ' : '') + mr.title;
   main.appendChild(a);
@@ -1234,6 +1254,7 @@ var DEMO_DATA={
   ]
 };
 
+syncHiddenAuthors();
 load();
 })();
 </script>

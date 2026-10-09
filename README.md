@@ -46,6 +46,27 @@ npx skills add sabasayer/mr-triage --global --agent claude-code -y
 Then just ask Claude Code to track what you're working on, or wire it into
 a delivery skill like `ship-work` — see [`skills/track-work/SKILL.md`](skills/track-work/SKILL.md).
 
+## Claude Code mods
+
+Two independent Claude Code plugins in [`mods/`](mods/). Both read this
+server (default port 4931), so `mr-triage` must be running. Install from a
+Claude Code terminal session, either or both:
+
+```
+/plugin install mr-triage-mrs --marketplace sabasayer/mr-triage
+/plugin install mr-triage-banner --marketplace sabasayer/mr-triage
+```
+
+Answer `y` to add the marketplace and pick a scope.
+
+- **`mr-triage-mrs`** — `/mrs` opens a pane of open MRs: pipeline status,
+  conflicts/approved flags, MR number and Linear issue, grouped by repo,
+  skipping authors you've hidden in the dashboard. Only polls after `/mrs`
+  has been run in the session.
+- **`mr-triage-banner`** — a banner above the prompt showing the tracked task
+  (see `track-work`) for the session's git repo and branch: state, Linear
+  issue, MR, pipeline, tested/reviewed. Hidden when the branch has no task.
+
 ## Development
 
 ```sh

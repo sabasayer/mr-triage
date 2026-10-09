@@ -1,0 +1,9 @@
+{
+  "name": "mr-triage-banner",
+  "version": "0.1.0",
+  "description": "Banner above the prompt showing the mr-triage task for the current repo and branch",
+  "author": {
+    "name": "Salih Sayer"
+  },
+  "types": "./types/index.d.ts"
+}

@@ -297,6 +297,16 @@ async function saveTasks(tasks) {
   await writeFile(TASKS_FILE, JSON.stringify(tasks, null, 2));
 }
 
+const HIDDEN_FILE = join(CONFIG_DIR, "hidden-authors.json");
+
+async function loadHiddenAuthors() {
+  try {
+    return JSON.parse(await readFile(HIDDEN_FILE, "utf8"));
+  } catch {
+    return [];
+  }
+}
+
 function taskId(repo, branch) {
   return `${repo}#${branch}`;
 }
@@ -404,6 +414,26 @@ const server = createServer(async (req, res) => {
   if (url.pathname === "/api/mrs") {
     res.writeHead(200, { "Content-Type": "application/json" });
     res.end(JSON.stringify(cache));
+    return;
+  }
+
+  if (url.pathname === "/api/hidden-authors") {
+    if (req.method === "PUT") {
+      let body = "";
+      for await (const chunk of req) body += chunk;
+      try {
+        const authors = JSON.parse(body || "[]");
+        if (!Array.isArray(authors) || !authors.every((a) => typeof a === "string")) throw new Error("expected string[]");
+        await mkdir(dirname(HIDDEN_FILE), { recursive: true });
+        await writeFile(HIDDEN_FILE, JSON.stringify(authors));
+      } catch (err) {
+        res.writeHead(400, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ error: err.message }));
+        return;
+      }
+    }
+    res.writeHead(200, { "Content-Type": "application/json" });
+    res.end(JSON.stringify(await loadHiddenAuthors()));
     return;
   }
 
