@@ -1,3 +1,10 @@
+# [1.2.0](https://github.com/sabasayer/mr-triage/compare/v1.1.0...v1.2.0) (2026-10-12)
+
+
+### Features
+
+* **tasks:** add paused state, loading/error feedback and task removal ([e75df44](https://github.com/sabasayer/mr-triage/commit/e75df44f3f1b6d6e5f799c82539e24e89817d0ae))
+
 # [1.1.0](https://github.com/sabasayer/mr-triage/compare/v1.0.0...v1.1.0) (2026-10-12)
 
 
