@@ -339,6 +339,8 @@ svg{display:block}
 .taskcard-top{display:flex;align-items:center;gap:8px}
 .taskcard .title{font-weight:600;font-size:13.5px}
 .statebadge{font-size:10.5px;font-weight:750;letter-spacing:.04em;text-transform:uppercase;padding:2px 7px;border-radius:999px;flex:none}
+.statebadge.local_testing{color:var(--purple);background:rgba(128,77,161,.12)}
+.statebadge.reviewing{color:var(--blue);background:rgba(77,97,229,.12)}
 .statebadge.working{color:var(--text-dim);background:var(--chip)}
 .statebadge.in_review{color:var(--blue);background:rgba(77,97,229,.12)}
 .statebadge.released{color:var(--ok);background:rgba(14,158,105,.12)}
@@ -354,6 +356,17 @@ svg{display:block}
 .fav.busy{animation:pulse 1s infinite}
 #toast{position:fixed;right:16px;bottom:16px;max-width:360px;padding:8px 12px;border-radius:8px;font-size:12.5px;color:var(--crit);background:var(--panel);border:1px solid var(--crit-line);box-shadow:0 4px 16px rgba(0,0,0,.18);z-index:50}
 #toast[hidden]{display:none}
+.taskpct{margin-left:auto;font-size:11.5px;font-weight:700;color:var(--text-dim);flex:none}
+.taskbar{height:6px;border-radius:999px;background:var(--chip);overflow:hidden}
+.taskbar-fill{height:100%;border-radius:999px;background:var(--accent);transition:width .25s}
+.taskbar-fill.released,.taskbar-fill.done{background:var(--ok)}
+.taskbar-fill.testing,.taskbar-fill.local_testing{background:var(--purple)}
+.taskbar-fill.paused{background:var(--warn)}
+.tasksteps{display:flex;gap:2px}
+.taskstep{flex:1;font-size:10.5px;padding:2px 0;border-radius:5px;color:var(--text-faint);background:none;text-align:center;white-space:nowrap}
+.taskstep:hover{background:var(--chip);color:var(--text)}
+.taskstep.past{color:var(--text-dim)}
+.taskstep.current{color:var(--text);font-weight:750}
 .taskcard-actions{display:flex;gap:6px;margin-left:auto}
 .taskcard-actions button{
   font-size:11.5px;font-weight:650;padding:3px 9px;border-radius:6px;
@@ -1164,7 +1177,12 @@ $('#tabTasks').addEventListener('click',function(){ setTab('tasks'); });
 setTab(activeTab);
 
 /* ── tasks tab ─────────────────────────────────────────── */
-var TASK_STATE_LABEL={working:'Working',in_review:'In Review',released:'Released',testing:'Testing',done:'Done',paused:'Paused'};
+var TASK_STEPS=[
+  ['working','Working'],['local_testing','Local test'],['reviewing','Self-review'],
+  ['in_review','MR review'],['released','Released'],['testing','Verifying'],['done','Done']
+];
+var TASK_STATE_LABEL={paused:'Paused'};
+TASK_STEPS.forEach(function(st){ TASK_STATE_LABEL[st[0]]=st[1]; });
 var showDoneTasks=false;
 
 function taskMrTags(t){
@@ -1185,6 +1203,12 @@ function taskMrTags(t){
   return tags;
 }
 
+function taskProgress(t){
+  var at=t.state==='paused' ? (t.paused_from||'working') : t.state;
+  var idx=TASK_STEPS.findIndex(function(st){ return st[0]===at; });
+  return { idx:Math.max(idx,0), pct:Math.round(Math.max(idx,0)/(TASK_STEPS.length-1)*100) };
+}
+
 function taskCard(t){
   var card=el('div','taskcard');
   var top=el('div','taskcard-top');
@@ -1194,15 +1218,23 @@ function taskCard(t){
   if(linkUrl){ title=el('a','title'); title.href=linkUrl; title.target='_blank'; title.rel='noopener'; title.textContent=t.title; }
   else title=el('span','title',t.title);
   top.appendChild(title);
-  [['tested','Tested'],['reviewed','Reviewed']].forEach(function(f){
-    var key=f[0], label=f[1];
-    var on=!!t[key];
-    var badge=el('button','flagbadge'+(on?' on':''), (on?'✓ ':'')+label);
-    badge.title=(on?'Mark not ':'Mark ')+label.toLowerCase();
-    badge.addEventListener('click',function(){ toggleTaskFlag(t.id,key,!on); });
-    top.appendChild(badge);
-  });
+  var prog=taskProgress(t);
+  top.appendChild(el('span','taskpct',prog.pct+'%'));
   card.appendChild(top);
+
+  var bar=el('div','taskbar'+(t.state==='paused'?' paused':''));
+  var fill=el('div','taskbar-fill '+(t.state==='paused'?'paused':t.state)); fill.style.width=prog.pct+'%';
+  bar.appendChild(fill);
+  card.appendChild(bar);
+  var steps=el('div','tasksteps');
+  TASK_STEPS.forEach(function(st,i){
+    var b=el('button','taskstep'+(i<prog.idx?' past':'')+(i===prog.idx?' current':''), st[1]);
+    b.title='Move to '+st[1];
+    b.addEventListener('click',function(){ if(t.state!==st[0]) transitionTask(t.id,st[0]); });
+    steps.appendChild(b);
+  });
+  card.appendChild(steps);
+
   card.appendChild(taskMrTags(t));
   if(pendingTasks[t.id]){ card.classList.add('pending'); card.appendChild(el('div','taskcard-meta saving','Saving…')); }
   if(taskErrors[t.id]) card.appendChild(el('div','taskcard-error','Failed: '+taskErrors[t.id]));
@@ -1214,11 +1246,11 @@ function taskCard(t){
   if(t.mr_url){ var ma=el('a',null,'MR'); ma.href=t.mr_url; ma.target='_blank'; ma.rel='noopener'; meta.appendChild(ma); }
   var actions=el('div','taskcard-actions');
   if(t.state==='paused'){
-    var resume=el('button',null,'Resume');
-    resume.addEventListener('click',function(){ transitionTask(t.id,'working'); });
+    var resume=el('button','secondary','Resume');
+    resume.addEventListener('click',function(){ transitionTask(t.id,t.paused_from||'working'); });
     actions.appendChild(resume);
   } else if(t.state!=='done'){
-    var pause=el('button',null,'Pause');
+    var pause=el('button','secondary','Pause');
     pause.addEventListener('click',function(){
       actions.textContent='';
       var input=document.createElement('input'); input.type='text'; input.placeholder='Why paused? (optional)'; input.className='pausereason';
@@ -1230,16 +1262,6 @@ function taskCard(t){
       input.focus();
     });
     actions.appendChild(pause);
-  }
-  if(t.state==='released'){
-    var toTesting=el('button',null,'Start testing');
-    toTesting.addEventListener('click',function(){ transitionTask(t.id,'testing'); });
-    actions.appendChild(toTesting);
-  }
-  if(t.state==='testing'){
-    var toDone=el('button',null,'Mark done');
-    toDone.addEventListener('click',function(){ transitionTask(t.id,'done'); });
-    actions.appendChild(toDone);
   }
   var remove=el('button','secondary','Remove');
   remove.title='Remove this task from the list';
@@ -1277,7 +1299,7 @@ function renderTasks(){
     e.appendChild(document.createTextNode('Star an MR, or start work with the track-work skill.'));
     panel.appendChild(e); return;
   }
-  var order=['working','in_review','released','testing','paused','done'];
+  var order=['working','local_testing','reviewing','in_review','released','testing','paused','done'];
   visible.sort(function(a,b){ return order.indexOf(a.state)-order.indexOf(b.state) || new Date(b.updated_at)-new Date(a.updated_at); });
   var cards=el('div','taskcards');
   visible.forEach(function(t){ cards.appendChild(taskCard(t)); });
