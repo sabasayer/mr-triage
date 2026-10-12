@@ -25,11 +25,16 @@ already happened, not the skill deciding the work is done.
 
 Take whatever's passed as args. For anything missing, derive or ask:
 
-1. **Repo** — derive from `git remote get-url origin` in the current directory: strip `git@gitlab.com:`/`https://gitlab.com/` and a trailing `.git` to get the `group/project` path. If there's no git remote, ask.
-2. **Branch** — `git rev-parse --abbrev-ref HEAD` in the current directory. If detached or unavailable, ask.
+1. **Repo** — always the `group/project` path from the git remote, for example `founda/application/xds-viewer-demo`. Never a folder name like `xds-demo`. Run `git -C <worktree-or-repo-path> remote get-url origin`. Strip `git@gitlab.com:` or `https://gitlab.com/` and the trailing `.git`. If a caller passes a short name, ignore it and use the remote path. The banner and the Tasks tab match tasks by this exact path. A short name makes a task that never matches. If there is no git remote, ask.
+2. **Branch** — `git -C <worktree-or-repo-path> rev-parse --abbrev-ref HEAD`. If detached or unavailable, ask.
+
 3. **Title** — required. If not passed, ask for a short one-line description of the work.
 4. **Linear URL** (optional) — if working from a Linear issue, pass its URL.
 5. **MR URL** (optional) — pass this once an MR exists for the work (this is what flips the task from Working to In Review).
+
+## Banner
+
+The mr-triage banner shows the task for the branch of the session's working directory. It runs `git` there. The task must use the remote path for `repo` (see Inputs). The session must also work inside that repo or worktree. A session in a folder that is not a git repo shows no banner. Tell the user if the session is not in the worktree.
 
 ## Server
 
