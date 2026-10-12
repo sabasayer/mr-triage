@@ -18,6 +18,7 @@ const TASK_STATE: Record<string, { label: string; color: string }> = {
   in_review: { label: 'In review', color: 'blue' },
   released: { label: 'Released', color: 'magenta' },
   testing: { label: 'Testing', color: 'cyan' },
+  paused: { label: 'Paused', color: 'yellow' },
   done: { label: 'Done', color: 'green' },
 }
 
