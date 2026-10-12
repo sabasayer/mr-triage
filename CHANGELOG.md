@@ -1,3 +1,11 @@
+# [1.1.0](https://github.com/sabasayer/mr-triage/compare/v1.0.0...v1.1.0) (2026-10-12)
+
+
+### Features
+
+* bullet multi-item copies for Slack ([34fbf70](https://github.com/sabasayer/mr-triage/commit/34fbf705b228775302f760d1edca7b60f301a62e))
+* **mods:** add /tasks view to MR pane ([4b03e5b](https://github.com/sabasayer/mr-triage/commit/4b03e5bdb847ba2e89ce1e36fc98057fdec26441))
+
 # 1.0.0 (2026-10-09)
 
 
