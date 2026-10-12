@@ -3,6 +3,7 @@ export type Task = {
   branch: string
   title: string
   state: string
+  paused_from?: string
   tested?: boolean
   reviewed?: boolean
   mr_status?: { iid: number; pipeline?: { status: string } }
