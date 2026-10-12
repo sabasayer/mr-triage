@@ -343,15 +343,24 @@ svg{display:block}
 .statebadge.in_review{color:var(--blue);background:rgba(77,97,229,.12)}
 .statebadge.released{color:var(--ok);background:rgba(14,158,105,.12)}
 .statebadge.testing{color:var(--purple);background:rgba(128,77,161,.12)}
+.statebadge.paused{color:var(--warn);background:var(--warn-bg)}
 .statebadge.done{color:var(--text-faint);background:var(--chip)}
 .taskcard-meta{font-size:11.5px;color:var(--text-faint);display:flex;gap:8px;flex-wrap:wrap}
 .taskcard-meta a{color:inherit}
+.pausereason{font:inherit;font-size:12px;padding:3px 8px;border:1px solid var(--line-strong);border-radius:6px;background:var(--panel);color:var(--text);min-width:220px}
+.taskcard.pending{opacity:.7}
+.taskcard .saving::before{content:"";display:inline-block;width:10px;height:10px;margin-right:6px;vertical-align:-1px;border:2px solid var(--line-strong);border-top-color:var(--accent);border-radius:50%;animation:spin .8s linear infinite}
+.taskcard-error{font-size:11.5px;color:var(--crit);background:var(--crit-bg);border:1px solid var(--crit-line);border-radius:6px;padding:3px 8px}
+.fav.busy{animation:pulse 1s infinite}
+#toast{position:fixed;right:16px;bottom:16px;max-width:360px;padding:8px 12px;border-radius:8px;font-size:12.5px;color:var(--crit);background:var(--panel);border:1px solid var(--crit-line);box-shadow:0 4px 16px rgba(0,0,0,.18);z-index:50}
+#toast[hidden]{display:none}
 .taskcard-actions{display:flex;gap:6px;margin-left:auto}
 .taskcard-actions button{
   font-size:11.5px;font-weight:650;padding:3px 9px;border-radius:6px;
   background:var(--accent);color:#fff;
 }
 .taskcard-actions button.secondary{background:var(--chip);color:var(--text)}
+.taskcard-actions button.armed{background:var(--crit-bg);color:var(--crit)}
 .showdone{font-size:11.5px;color:var(--text-faint);display:flex;align-items:center;gap:5px;margin-bottom:10px}
 .flagbadge{
   font-size:10.5px;font-weight:650;padding:1px 7px;border-radius:999px;flex:none;
@@ -497,21 +506,42 @@ function loadTasks(){
 }
 
 function isTracked(mrUrl){ return tasks.some(function(t){ return t.mr_url===mrUrl; }); }
-function trackMr(mr){
-  fetch('/api/tasks',{
-    method:'POST', headers:{'Content-Type':'application/json'},
-    body:JSON.stringify({ repo: mr.project || mr._project, branch: mr.source_branch || ('mr-'+mr.iid), title: mr.title, mr_url: mr.web_url })
-  }).then(loadTasks).then(render);
+function api(url,body,method){
+  return fetch(url,{method:method||'POST', headers:{'Content-Type':'application/json'}, body:body===undefined?undefined:JSON.stringify(body)})
+    .then(function(r){
+      return r.json().catch(function(){ return {}; }).then(function(d){
+        if(!r.ok) throw new Error(d.error||('HTTP '+r.status));
+        return d;
+      });
+    });
 }
-function transitionTask(id,state){
-  fetch('/api/tasks/'+encodeURIComponent(id)+'/state',{
-    method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({state:state})
-  }).then(loadTasks).then(render);
+var toastTimer;
+function toast(msg){
+  var n=$('#toast'); n.textContent=msg; n.hidden=false;
+  clearTimeout(toastTimer); toastTimer=setTimeout(function(){ n.hidden=true; },6000);
+}
+var pendingTasks={}, taskErrors={}, pendingTracks={};
+function runTaskAction(id,url,body,method){
+  pendingTasks[id]=true; delete taskErrors[id]; renderTasks();
+  api(url,body,method).then(loadTasks)
+    .catch(function(err){ taskErrors[id]=err.message||'Request failed'; })
+    .then(function(){ delete pendingTasks[id]; renderTasks(); render(); });
+}
+function trackMr(mr){
+  pendingTracks[mr.web_url]=true; render();
+  api('/api/tasks',{ repo: mr.project || mr._project, branch: mr.source_branch || ('mr-'+mr.iid), title: mr.title, mr_url: mr.web_url })
+    .then(loadTasks)
+    .catch(function(err){ toast('Could not track MR: '+(err.message||'request failed')); })
+    .then(function(){ delete pendingTracks[mr.web_url]; render(); });
+}
+function removeTask(id){
+  runTaskAction(id,'/api/tasks/'+encodeURIComponent(id),undefined,'DELETE');
+}
+function transitionTask(id,state,reason){
+  runTaskAction(id,'/api/tasks/'+encodeURIComponent(id)+'/state',{state:state,reason:reason});
 }
 function toggleTaskFlag(id,flag,value){
-  fetch('/api/tasks/'+encodeURIComponent(id)+'/flag',{
-    method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({flag:flag,value:value})
-  }).then(loadTasks).then(render);
+  runTaskAction(id,'/api/tasks/'+encodeURIComponent(id)+'/flag',{flag:flag,value:value});
 }
 
 /* ── notifications ─────────────────────────────────────── */
@@ -945,8 +975,10 @@ function rowEl(mr,g){
 
   var acts=el('div','acts');
   var tracked=isTracked(mr.web_url);
-  var fb=el('button','fav'+(tracked?' on':''), tracked?'★':'☆');
-  fb.title=tracked?'Tracked as a task':'Track as a task';
+  var tracking=!!pendingTracks[mr.web_url];
+  var fb=el('button','fav'+(tracked?' on':'')+(tracking?' busy':''), tracking?'…':(tracked?'★':'☆'));
+  fb.title=tracking?'Tracking…':(tracked?'Tracked as a task':'Track as a task');
+  fb.disabled=tracking;
   fb.addEventListener('click',function(){ if(!tracked) trackMr(mr); });
   acts.appendChild(fb);
   if(broken(mr) && mr.pipeline){
@@ -1054,7 +1086,7 @@ function retry(mr,btn){
   if(demo){ setTimeout(function(){ btn.classList.remove('busy'); btn.disabled=false; },1200); return; }
   fetch('/api/pipelines/'+pid+'/'+mr.pipeline.id+'/retry',{method:'POST'})
     .then(function(r){ if(!r.ok) throw new Error('HTTP '+r.status); })
-    .catch(function(){ btn.title='Retry failed'; })
+    .catch(function(err){ btn.title='Retry failed'; toast('Retry failed: '+(err.message||'request failed')); })
     .then(function(){ btn.classList.remove('busy'); btn.disabled=false; setTimeout(load,1200); });
 }
 function waitingForApprovalMrs(){
@@ -1132,7 +1164,7 @@ $('#tabTasks').addEventListener('click',function(){ setTab('tasks'); });
 setTab(activeTab);
 
 /* ── tasks tab ─────────────────────────────────────────── */
-var TASK_STATE_LABEL={working:'Working',in_review:'In Review',released:'Released',testing:'Testing',done:'Done'};
+var TASK_STATE_LABEL={working:'Working',in_review:'In Review',released:'Released',testing:'Testing',done:'Done',paused:'Paused'};
 var showDoneTasks=false;
 
 function taskMrTags(t){
@@ -1172,12 +1204,33 @@ function taskCard(t){
   });
   card.appendChild(top);
   card.appendChild(taskMrTags(t));
+  if(pendingTasks[t.id]){ card.classList.add('pending'); card.appendChild(el('div','taskcard-meta saving','Saving…')); }
+  if(taskErrors[t.id]) card.appendChild(el('div','taskcard-error','Failed: '+taskErrors[t.id]));
+  if(t.state==='paused' && t.paused_reason) card.appendChild(el('div','taskcard-meta',t.paused_reason));
 
   var meta=el('div','taskcard-meta');
   meta.appendChild(el('span',null,t.repo+' · '+t.branch));
   if(t.linear_url){ var la=el('a',null,'Linear'); la.href=t.linear_url; la.target='_blank'; la.rel='noopener'; meta.appendChild(la); }
   if(t.mr_url){ var ma=el('a',null,'MR'); ma.href=t.mr_url; ma.target='_blank'; ma.rel='noopener'; meta.appendChild(ma); }
   var actions=el('div','taskcard-actions');
+  if(t.state==='paused'){
+    var resume=el('button',null,'Resume');
+    resume.addEventListener('click',function(){ transitionTask(t.id,'working'); });
+    actions.appendChild(resume);
+  } else if(t.state!=='done'){
+    var pause=el('button',null,'Pause');
+    pause.addEventListener('click',function(){
+      actions.textContent='';
+      var input=document.createElement('input'); input.type='text'; input.placeholder='Why paused? (optional)'; input.className='pausereason';
+      var ok=el('button',null,'Pause');
+      var submit=function(){ transitionTask(t.id,'paused',input.value.trim()); };
+      ok.addEventListener('click',submit);
+      input.addEventListener('keydown',function(e){ if(e.key==='Enter') submit(); if(e.key==='Escape') renderTasks(); });
+      actions.appendChild(input); actions.appendChild(ok);
+      input.focus();
+    });
+    actions.appendChild(pause);
+  }
   if(t.state==='released'){
     var toTesting=el('button',null,'Start testing');
     toTesting.addEventListener('click',function(){ transitionTask(t.id,'testing'); });
@@ -1188,8 +1241,20 @@ function taskCard(t){
     toDone.addEventListener('click',function(){ transitionTask(t.id,'done'); });
     actions.appendChild(toDone);
   }
+  var remove=el('button','secondary','Remove');
+  remove.title='Remove this task from the list';
+  remove.addEventListener('click',function(){
+    if(!remove.classList.contains('armed')){
+      remove.classList.add('armed'); remove.textContent='Really remove?';
+      setTimeout(function(){ remove.classList.remove('armed'); remove.textContent='Remove'; },4000);
+      return;
+    }
+    removeTask(t.id);
+  });
+  actions.appendChild(remove);
   meta.appendChild(actions);
   card.appendChild(meta);
+  if(pendingTasks[t.id]) card.querySelectorAll('button,input').forEach(function(n){ n.disabled=true; });
   return card;
 }
 
@@ -1212,7 +1277,7 @@ function renderTasks(){
     e.appendChild(document.createTextNode('Star an MR, or start work with the track-work skill.'));
     panel.appendChild(e); return;
   }
-  var order=['working','in_review','released','testing','done'];
+  var order=['working','in_review','released','testing','paused','done'];
   visible.sort(function(a,b){ return order.indexOf(a.state)-order.indexOf(b.state) || new Date(b.updated_at)-new Date(a.updated_at); });
   var cards=el('div','taskcards');
   visible.forEach(function(t){ cards.appendChild(taskCard(t)); });
@@ -1261,5 +1326,6 @@ syncHiddenAuthors();
 load();
 })();
 </script>
+<div id="toast" role="alert" hidden></div>
 </body>
 </html>

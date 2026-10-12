@@ -311,8 +311,9 @@ function taskId(repo, branch) {
   return `${repo}#${branch}`;
 }
 
-async function upsertTask({ repo, branch, title, linear_url, mr_url }) {
+async function upsertTask({ repo, branch, title, linear_url, mr_url, state, reason }) {
   if (!repo || !branch) throw new Error("repo and branch are required");
+  if (state !== undefined && !TASK_STATES.includes(state)) throw new Error(`unknown state: ${state}`);
   const tasks = await loadTasks();
   const id = taskId(repo, branch);
   const now = new Date().toISOString();
@@ -326,6 +327,7 @@ async function upsertTask({ repo, branch, title, linear_url, mr_url }) {
       state: mr_url ? "in_review" : "working",
       tested: false,
       reviewed: false,
+      paused_reason: null,
       created_at: now, updated_at: now,
     };
     tasks.push(task);
@@ -338,20 +340,35 @@ async function upsertTask({ repo, branch, title, linear_url, mr_url }) {
     }
     task.updated_at = now;
   }
+  if (state) applyState(task, state, reason);
   await saveTasks(tasks);
   return task;
 }
 
-const TASK_STATES = ["working", "in_review", "released", "testing", "done"];
-async function transitionTask(id, state) {
+// A paused task is waiting on something outside the code (e.g. customer
+// info). Nothing moves it automatically; only the user does.
+const TASK_STATES = ["working", "in_review", "released", "testing", "done", "paused"];
+function applyState(task, state, reason) {
+  task.state = state;
+  task.paused_reason = state === "paused" && reason ? String(reason) : null;
+  task.updated_at = new Date().toISOString();
+}
+
+async function transitionTask(id, state, reason) {
   if (!TASK_STATES.includes(state)) throw new Error(`unknown state: ${state}`);
   const tasks = await loadTasks();
   const task = tasks.find((t) => t.id === id);
   if (!task) throw new Error("task not found");
-  task.state = state;
-  task.updated_at = new Date().toISOString();
+  applyState(task, state, reason);
   await saveTasks(tasks);
   return task;
+}
+
+async function removeTask(id) {
+  const tasks = await loadTasks();
+  if (!tasks.some((t) => t.id === id)) throw new Error("task not found");
+  await saveTasks(tasks.filter((t) => t.id !== id));
+  taskLiveStatus.delete(id);
 }
 
 // Independent of `state` -- a task can be e.g. In Review and already
@@ -464,13 +481,26 @@ const server = createServer(async (req, res) => {
     return;
   }
 
+  const taskMatch = url.pathname.match(/^\/api\/tasks\/([^/]+)$/);
+  if (taskMatch && req.method === "DELETE") {
+    try {
+      await removeTask(decodeURIComponent(taskMatch[1]));
+      res.writeHead(200, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ ok: true }));
+    } catch (err) {
+      res.writeHead(400, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ error: err.message }));
+    }
+    return;
+  }
+
   const taskStateMatch = url.pathname.match(/^\/api\/tasks\/([^/]+)\/state$/);
   if (taskStateMatch && req.method === "POST") {
     let body = "";
     for await (const chunk of req) body += chunk;
     try {
-      const { state } = JSON.parse(body || "{}");
-      const task = await transitionTask(decodeURIComponent(taskStateMatch[1]), state);
+      const { state, reason } = JSON.parse(body || "{}");
+      const task = await transitionTask(decodeURIComponent(taskStateMatch[1]), state, reason);
       res.writeHead(200, { "Content-Type": "application/json" });
       res.end(JSON.stringify(task));
     } catch (err) {

@@ -16,6 +16,10 @@ Released → Testing → Done). It only creates a task and fills in metadata
 (title, Linear URL, MR URL). State moves forward automatically (MR opens,
 MR merges + releases) or manually in the mr-triage UI — never from here.
 
+`POST /api/tasks` also accepts optional `state` and `reason` (used for the
+manual `paused` state, e.g. waiting on the customer). Never send them from
+this skill — pausing and resuming are the user's call.
+
 It *can* set the `tested` and `reviewed` flags — see "Flags" below. These
 are independent of state (a task can be in any state and tested/reviewed
 in any combination), and recording them here is capturing something that

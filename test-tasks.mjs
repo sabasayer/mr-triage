@@ -58,6 +58,48 @@ try {
     method: "POST", body: JSON.stringify({ flag: "bogus", value: true }),
   }).then((r) => assert.equal(r.status, 400, "unknown flag is rejected"));
 
+  const pausedViaUpsert = await fetch(base + "/api/tasks", {
+    method: "POST",
+    body: JSON.stringify({ repo: "org/proj", branch: "feat/x", state: "paused", reason: "need repro steps from customer" }),
+  }).then((r) => r.json());
+  assert.equal(pausedViaUpsert.state, "paused", "POST /api/tasks can set paused");
+  assert.equal(pausedViaUpsert.paused_reason, "need repro steps from customer");
+
+  const resumed = await fetch(base + `/api/tasks/${encodeURIComponent(withMr.id)}/state`, {
+    method: "POST", body: JSON.stringify({ state: "working" }),
+  }).then((r) => r.json());
+  assert.equal(resumed.state, "working");
+  assert.equal(resumed.paused_reason, null, "leaving paused clears the reason");
+
+  const pausedViaState = await fetch(base + `/api/tasks/${encodeURIComponent(withMr.id)}/state`, {
+    method: "POST", body: JSON.stringify({ state: "paused" }),
+  }).then((r) => r.json());
+  assert.equal(pausedViaState.paused_reason, null, "reason is optional");
+
+  await fetch(base + "/api/tasks", {
+    method: "POST", body: JSON.stringify({ repo: "org/proj", branch: "feat/x", state: "bogus" }),
+  }).then((r) => assert.equal(r.status, 400, "upsert rejects an unknown state"));
+
+  await fetch(base + "/api/tasks", {
+    method: "POST",
+    body: JSON.stringify({ repo: "org/proj", branch: "feat/x", mr_url: "https://gitlab.com/org/proj/-/merge_requests/1" }),
+  });
+  const stillPaused = (await fetch(base + "/api/tasks").then((r) => r.json())).tasks[0];
+  assert.equal(stillPaused.state, "paused", "re-posting an MR URL does not un-pause");
+
+  await fetch(base + `/api/tasks/${encodeURIComponent(withMr.id)}/state`, {
+    method: "POST", body: JSON.stringify({ state: "testing" }),
+  });
+
+  await fetch(base + "/api/tasks", {
+    method: "POST", body: JSON.stringify({ repo: "org/proj", branch: "feat/abandoned", title: "Abandoned" }),
+  });
+  const abandonedId = encodeURIComponent("org/proj#feat/abandoned");
+  await fetch(base + `/api/tasks/${abandonedId}`, { method: "DELETE" }).then((r) => assert.equal(r.status, 200, "task can be removed"));
+  const left = (await fetch(base + "/api/tasks").then((r) => r.json())).tasks;
+  assert.deepEqual(left.map((t) => t.id), ["org/proj#feat/x"], "only the removed task is gone");
+  await fetch(base + `/api/tasks/${abandonedId}`, { method: "DELETE" }).then((r) => assert.equal(r.status, 400, "removing an unknown task is rejected"));
+
   const stored = JSON.parse(await readFile(join(home, ".mr-triage", "tasks.json"), "utf8"));
   assert.equal(stored.length, 1, "one task on disk, upserted not duplicated");
   assert.equal(stored[0].state, "testing");
