@@ -12,6 +12,9 @@ const view = atom({ plugin: 'mr-triage-mrs', key: 'view' } as const, 'mrs' as Vi
 
 const TASK_STATE: Record<string, { label: string; color: string }> = {
   working: { label: 'Working', color: 'yellow' },
+  local_testing: { label: 'Local test', color: 'cyan' },
+  reviewing: { label: 'Self-review', color: 'blue' },
+  paused: { label: 'Paused', color: 'gray' },
   in_review: { label: 'In review', color: 'blue' },
   released: { label: 'Released', color: 'magenta' },
   testing: { label: 'Testing', color: 'cyan' },
@@ -70,13 +73,13 @@ export const register: Register = (on, options) => {
 
   on('session.start', async ($, e, next) => {
     await $.command.register({ name: 'mrs', description: 'Show open MRs and pipeline status' })
-    await $.command.register({ name: 'tasks', description: 'Show tracked tasks (run /mrs to switch back)' })
+    await $.command.register({ name: 'mr-tasks', description: 'Show tracked tasks (run /mrs to switch back)' })
 
     return next(e)
   })
 
-  for (const name of ['mrs', 'tasks'] as const) {
-    on('command.run', { command: name }, async $ => {
+  for (const [command, name] of [['mrs', 'mrs'], ['mr-tasks', 'tasks']] as const) {
+    on('command.run', { command }, async $ => {
       await update($, view, () => name)
       await refresh($, base)
       if (!isPolling) {
@@ -85,7 +88,7 @@ export const register: Register = (on, options) => {
       }
       await $.ui.open({ id: PANE, title: name === 'mrs' ? 'MRs' : 'Tasks' })
 
-      return { text: `${name} pane opened.` }
+      return { text: `${command} pane opened.` }
     })
   }
 

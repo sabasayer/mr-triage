@@ -347,8 +347,9 @@ async function upsertTask({ repo, branch, title, linear_url, mr_url, state, reas
 
 // A paused task is waiting on something outside the code (e.g. customer
 // info). Nothing moves it automatically; only the user does.
-const TASK_STATES = ["working", "in_review", "released", "testing", "done", "paused"];
+const TASK_STATES = ["working", "local_testing", "reviewing", "in_review", "released", "testing", "done", "paused"];
 function applyState(task, state, reason) {
+  if (state === "paused" && task.state !== "paused") task.paused_from = task.state;
   task.state = state;
   task.paused_reason = state === "paused" && reason ? String(reason) : null;
   task.updated_at = new Date().toISOString();

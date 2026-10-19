@@ -15,6 +15,9 @@ const task = atom({ plugin: 'mr-triage-banner', key: 'task' } as const, null as 
 
 const TASK_STATE: Record<string, { label: string; color: string }> = {
   working: { label: 'Working', color: 'yellow' },
+  local_testing: { label: 'Local test', color: 'cyan' },
+  reviewing: { label: 'Self-review', color: 'blue' },
+  paused: { label: 'Paused', color: 'gray' },
   in_review: { label: 'In review', color: 'blue' },
   released: { label: 'Released', color: 'magenta' },
   testing: { label: 'Testing', color: 'cyan' },
