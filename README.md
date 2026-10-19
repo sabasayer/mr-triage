@@ -61,11 +61,13 @@ Answer `y` to add the marketplace and pick a scope.
 
 - **`mr-triage-mrs`** — `/mrs` opens a pane of open MRs: pipeline status,
   conflicts/approved flags, MR number and Linear issue, grouped by repo,
-  skipping authors you've hidden in the dashboard. Only polls after `/mrs`
-  has been run in the session.
+  skipping authors you've hidden in the dashboard. Buttons in the pane switch
+  to your tracked tasks (also `/mr-tasks`) and collapse it to one line. Only
+  polls after `/mrs` has been run in the session.
 - **`mr-triage-banner`** — a banner above the prompt showing the tracked task
   (see `track-work`) for the session's git repo and branch: state, Linear
-  issue, MR, pipeline, tested/reviewed. Hidden when the branch has no task.
+  issue, MR, pipeline, a progress bar and a small character. If a `/crew` run for the same Linear ticket
+  exists in `~/.crew`, it adds a short crew line. Hidden when the branch has no task.
 
 ## Development
 

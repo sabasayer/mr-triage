@@ -3,6 +3,7 @@ export type Task = {
   branch: string
   title: string
   state: string
+  paused_from?: string
   tested?: boolean
   reviewed?: boolean
   mr_status?: { iid: number; pipeline?: { status: string } }
@@ -10,6 +11,6 @@ export type Task = {
 
 declare module 'claude-code' {
   interface PluginState {
-    'mr-triage-banner': { task: Task | null }
+    'mr-triage-banner': { task: Task | null; crew: string | null }
   }
 }

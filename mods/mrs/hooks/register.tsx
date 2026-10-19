@@ -10,6 +10,33 @@ const mrs = atom({ plugin: 'mr-triage-mrs', key: 'mrs' } as const, { groups: [] 
 const tasks = atom({ plugin: 'mr-triage-mrs', key: 'tasks' } as const, [] as Task[])
 const view = atom({ plugin: 'mr-triage-mrs', key: 'view' } as const, 'mrs' as View)
 
+const compact = atom({ plugin: 'mr-triage-mrs', key: 'compact' } as const, false)
+
+const STEPS = ['working', 'local_testing', 'reviewing', 'in_review', 'released', 'testing', 'done']
+const FACE: Record<string, string> = {
+  working: '(•_•)',
+  local_testing: '(•_•)⚗',
+  reviewing: '(•_•)🔍',
+  in_review: '(•_•)…',
+  released: '\\(•‿•)/',
+  testing: '(•_•)🔍',
+  done: '(^‿^)✔',
+  paused: '(-_-)zz',
+}
+
+function progress(task: Task) {
+  const step = task.state === 'paused' ? task.paused_from ?? 'working' : task.state
+  const index = Math.max(0, STEPS.indexOf(step))
+
+  return Math.round((index / (STEPS.length - 1)) * 100)
+}
+
+function barText(percent: number, width: number) {
+  const filled = Math.round((width * percent) / 100)
+
+  return '█'.repeat(filled) + '░'.repeat(width - filled)
+}
+
 const TASK_STATE: Record<string, { label: string; color: string }> = {
   working: { label: 'Working', color: 'yellow' },
   local_testing: { label: 'Local test', color: 'cyan' },
@@ -94,16 +121,39 @@ export const register: Register = (on, options) => {
 
 
   on('ui.render', { component: 'Pane', requestId: PANE }, async ($, e) => {
-    const { Box, Text } = $.ui.resolve(e)
+    const { Box, Text, Button } = $.ui.resolve(e)
     const { groups, error } = await read($, mrs)
+    const current = await read($, view)
+    const isCompact = await read($, compact)
+    const list = await read($, tasks)
+    const mrCount = groups.reduce((sum, group) => sum + group.mrs.length, 0)
+    const failedCount = groups.reduce((sum, group) => sum + group.mrs.filter(mr => mr.pipeline?.status === 'failed').length, 0)
+
+    const header = (
+      <Box flexDirection="row" gap={1}>
+        <Button key="mrs" label={`${current === 'mrs' ? '●' : '○'} MRs ${mrCount}`} plain onPress={() => update($, view, () => 'mrs')} />
+        <Button key="tasks" label={`${current === 'tasks' ? '●' : '○'} Tasks ${list.length}`} plain onPress={() => update($, view, () => 'tasks')} />
+        <Button key="compact" label={isCompact ? 'Expand' : 'Collapse'} plain onPress={() => update($, compact, prev => !prev)} />
+      </Box>
+    )
 
     if (error) return <Text color="red">{error}</Text>
 
-    if ((await read($, view)) === 'tasks') {
-      const list = await read($, tasks)
-
+    if (isCompact) {
       return (
         <Box flexDirection="column">
+          {header}
+          <Text dimColor>
+            {mrCount} MRs{failedCount > 0 ? ` · ${failedCount} failed` : ''} · {list.length} tasks
+          </Text>
+        </Box>
+      )
+    }
+
+    if (current === 'tasks') {
+      return (
+        <Box flexDirection="column">
+          {header}
           {list.length === 0 && <Text dimColor>No open tasks.</Text>}
           {list.map(task => {
             const state = TASK_STATE[task.state] ?? { label: task.state, color: 'gray' }
@@ -112,13 +162,14 @@ export const register: Register = (on, options) => {
 
             return (
               <Text wrap="truncate-end">
-                <Text color={state.color}>● {state.label.padEnd(9)}</Text>
-                <Text dimColor> {projectName(task.repo)}</Text>
-                {task.mr_status?.iid && <Text bold> !{task.mr_status.iid}</Text>}
+                <Text color={pipeline?.color ?? NO_PIPELINE.color}>{pipeline?.icon ?? NO_PIPELINE.icon}</Text>
                 {linear && <Text color="magenta"> {linear}</Text>}
-                {pipeline && <Text color={pipeline.color}> {pipeline.icon}</Text>}
-                {task.tested && <Text color="green"> tested ✔</Text>}
-                {task.reviewed && <Text color="green"> reviewed ✔</Text>} <Text dimColor>{shortTitle(task.title)}</Text>
+                {task.mr_status?.iid && <Text bold> !{task.mr_status.iid}</Text>}
+                <Text color={state.color}> {FACE[task.state] ?? '(•_•)'}</Text>
+                <Text color={task.state === 'paused' ? 'yellow' : 'magenta'}> {barText(progress(task), 7)}</Text>
+                <Text dimColor> {String(progress(task)).padStart(3)}%</Text>
+                <Text color={state.color}> {state.label}</Text>
+                <Text dimColor> {projectName(task.repo)} {shortTitle(task.title)}</Text>
               </Text>
             )
           })}
@@ -128,6 +179,7 @@ export const register: Register = (on, options) => {
 
     return (
       <Box flexDirection="column">
+        {header}
         {groups.length === 0 && <Text dimColor>No MRs.</Text>}
         {groups.map(group => {
           const failed = group.mrs.filter(mr => mr.pipeline?.status === 'failed').length
