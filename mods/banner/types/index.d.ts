@@ -11,6 +11,6 @@ export type Task = {
 
 declare module 'claude-code' {
   interface PluginState {
-    'mr-triage-banner': { task: Task | null }
+    'mr-triage-banner': { task: Task | null; crew: string | null }
   }
 }

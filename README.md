@@ -66,7 +66,8 @@ Answer `y` to add the marketplace and pick a scope.
   polls after `/mrs` has been run in the session.
 - **`mr-triage-banner`** — a banner above the prompt showing the tracked task
   (see `track-work`) for the session's git repo and branch: state, Linear
-  issue, MR, pipeline, a progress bar and a small character. Hidden when the branch has no task.
+  issue, MR, pipeline, a progress bar and a small character. If a `/crew` run for the same Linear ticket
+  exists in `~/.crew`, it adds a short crew line. Hidden when the branch has no task.
 
 ## Development
 

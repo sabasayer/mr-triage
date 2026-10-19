@@ -11,6 +11,8 @@ const PIPELINE: Record<string, { icon: string; color: string }> = {
   running: { icon: '◐', color: 'yellow' },
   pending: { icon: '◐', color: 'yellow' },
 }
+const crew = atom({ plugin: 'mr-triage-banner', key: 'crew' } as const, null as string | null)
+
 const STEPS = ['working', 'local_testing', 'reviewing', 'in_review', 'released', 'testing', 'done']
 const PAUSED = '#e5a04b'
 const ACCENT = '#8f8cf4'
@@ -131,15 +133,57 @@ async function currentBranch($: EngineInterface) {
   return { repo, branch: branch.stdout.trim() }
 }
 
+async function crewSummary($: EngineInterface, ticket: string) {
+  const home = await $.env.get('HOME')
+  const root = (await $.env.get('CREW_BOARD_ROOT')) || `${home}/.crew`
+  const folders = (await $.fs.list(root).catch(() => []))
+    .filter(f => f.kind === 'dir' && (f.name === ticket || f.name.startsWith(`${ticket}-mr`)))
+    .sort((a, b) => b.mtimeMs - a.mtimeMs)
+  if (folders.length === 0) return null
+
+  const dir = `${root}/${folders[0].name}`
+  const files = (await $.fs.list(dir).catch(() => [])).filter(f => f.name.endsWith('.json'))
+  const agents = await Promise.all(
+    files.map(async f => {
+      try {
+        const data = JSON.parse(await $.fs.read(`${dir}/${f.name}`))
+
+        return { role: String(data.role ?? f.name.replace(/\.json$/, '')), state: String(data.state) }
+      } catch {
+        return { role: f.name, state: 'unreadable' }
+      }
+    }),
+  )
+  if (agents.length === 0) return null
+
+  const done = agents.filter(a => a.state === 'done').length
+  const running = agents.filter(a => a.state === 'running').length
+  const failed = agents.filter(a => a.state === 'failed').length
+  const blocked = agents.find(a => a.state === 'blocked')
+
+  return [
+    `crew ${done}/${agents.length}`,
+    running > 0 && `▶${running}`,
+    failed > 0 && `✖${failed}`,
+    blocked && `⏸ ${blocked.role}`,
+  ]
+    .filter(Boolean)
+    .join(' ')
+}
+
 async function refreshTask($: EngineInterface, base: string) {
   try {
     const here = await currentBranch($)
     const res = await $.http.fetch(`${base}/api/tasks`)
     const tasks: Task[] = JSON.parse(res.text).tasks ?? []
     const found = here && tasks.find(t => t.repo === here.repo && t.branch === here.branch)
+    const ticket = found && linearId(found.title, found.branch)?.toLowerCase()
+    const summary = ticket ? await crewSummary($, ticket).catch(() => null) : null
     await update($, task, () => found || null)
+    await update($, crew, () => summary)
   } catch {
     await update($, task, () => null)
+    await update($, crew, () => null)
   }
 }
 
@@ -163,7 +207,8 @@ export const register: Register = (on, options) => {
     const linear = linearId(current.title, current.branch)
     const pipeline = PIPELINE[current.mr_status?.pipeline?.status ?? '']
     const percent = progress(current)
-    const name = [state.label, linear, shortTitle(current.title)].filter(Boolean).join(' · ')
+    const crewLine = await read($, crew)
+    const name = [state.label, linear, crewLine, shortTitle(current.title)].filter(Boolean).join(' · ')
 
     if ('Svg' in ui) {
       const { Svg } = ui
@@ -181,6 +226,7 @@ export const register: Register = (on, options) => {
           <Text color={current.state === 'paused' ? 'yellow' : 'magenta'}> {barText(percent, 10)}</Text>
           <Text dimColor> {percent}%</Text>
           {linear && <Text color="magenta"> {linear}</Text>}
+          {crewLine && <Text color="cyan"> ⚓ {crewLine}</Text>}
           {current.mr_status?.iid && <Text bold> !{current.mr_status.iid}</Text>}
           {pipeline && <Text color={pipeline.color}> {pipeline.icon}</Text>}
           <Text dimColor> {shortTitle(current.title)}</Text>
