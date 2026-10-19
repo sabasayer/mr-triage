@@ -1,3 +1,10 @@
+# [1.4.0](https://github.com/sabasayer/mr-triage/compare/v1.3.0...v1.4.0) (2026-10-19)
+
+
+### Features
+
+* **tasks:** show crew run badge on task cards and pane rows ([b350645](https://github.com/sabasayer/mr-triage/commit/b3506459d8615d5167ee8835d990e77fe1e59b51))
+
 # [1.3.0](https://github.com/sabasayer/mr-triage/compare/v1.2.0...v1.3.0) (2026-10-19)
 
 
