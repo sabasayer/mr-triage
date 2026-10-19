@@ -54,6 +54,12 @@ try {
   assert.equal(tested.state, "testing", "flipping a flag doesn't touch state");
   assert.equal(tested.reviewed, false, "the other flag is untouched");
 
+  const reviewed = await fetch(base + `/api/tasks/${encodeURIComponent(withMr.id)}/state`, {
+    method: "POST", body: JSON.stringify({ state: "reviewing" }),
+  }).then((r) => r.json());
+  assert.equal(reviewed.reviewed, true, "reviewing state sets the reviewed check");
+  assert.equal(reviewed.state, "testing", "a check does not move the state");
+
   await fetch(base + `/api/tasks/${encodeURIComponent(withMr.id)}/flag`, {
     method: "POST", body: JSON.stringify({ flag: "bogus", value: true }),
   }).then((r) => assert.equal(r.status, 400, "unknown flag is rejected"));

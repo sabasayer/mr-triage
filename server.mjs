@@ -286,10 +286,22 @@ const TASKS_FILE = join(CONFIG_DIR, "tasks.json");
 
 async function loadTasks() {
   try {
-    return JSON.parse(await readFile(TASKS_FILE, "utf8"));
+    return JSON.parse(await readFile(TASKS_FILE, "utf8")).map(migrateCheckState);
   } catch {
     return [];
   }
+}
+
+const CHECK_STATES = { local_testing: "tested", reviewing: "reviewed" };
+
+function migrateCheckState(task) {
+  for (const key of ["state", "paused_from"]) {
+    const flag = CHECK_STATES[task[key]];
+    if (!flag) continue;
+    task[flag] = true;
+    task[key] = "working";
+  }
+  return task;
 }
 
 async function saveTasks(tasks) {
@@ -349,6 +361,11 @@ async function upsertTask({ repo, branch, title, linear_url, mr_url, state, reas
 // info). Nothing moves it automatically; only the user does.
 const TASK_STATES = ["working", "local_testing", "reviewing", "in_review", "released", "testing", "done", "paused"];
 function applyState(task, state, reason) {
+  if (CHECK_STATES[state]) {
+    task[CHECK_STATES[state]] = true;
+    task.updated_at = new Date().toISOString();
+    return;
+  }
   if (state === "paused" && task.state !== "paused") task.paused_from = task.state;
   task.state = state;
   task.paused_reason = state === "paused" && reason ? String(reason) : null;

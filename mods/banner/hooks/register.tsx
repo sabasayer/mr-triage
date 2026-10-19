@@ -13,7 +13,7 @@ const PIPELINE: Record<string, { icon: string; color: string }> = {
 }
 const crew = atom({ plugin: 'mr-triage-banner', key: 'crew' } as const, null as string | null)
 
-const STEPS = ['working', 'local_testing', 'reviewing', 'in_review', 'released', 'testing', 'done']
+const STEPS = ['working', 'in_review', 'released', 'testing', 'done']
 const PAUSED = '#e5a04b'
 const ACCENT = '#8f8cf4'
 const DONE = '#5fbf8f'
@@ -23,8 +23,6 @@ const H = 22
 const SCALE = 2
 const FACE: Record<string, string> = {
   working: '(•_•)',
-  local_testing: '(•_•)⚗',
-  reviewing: '(•_•)🔍',
   in_review: '(•_•)…',
   released: '\\(•‿•)/',
   testing: '(•_•)🔍',
@@ -35,8 +33,6 @@ const task = atom({ plugin: 'mr-triage-banner', key: 'task' } as const, null as 
 
 const TASK_STATE: Record<string, { label: string; color: string }> = {
   working: { label: 'Working', color: 'yellow' },
-  local_testing: { label: 'Local test', color: 'cyan' },
-  reviewing: { label: 'Self-review', color: 'blue' },
   paused: { label: 'Paused', color: 'gray' },
   in_review: { label: 'In review', color: 'blue' },
   released: { label: 'Released', color: 'magenta' },
@@ -208,7 +204,8 @@ export const register: Register = (on, options) => {
     const pipeline = PIPELINE[current.mr_status?.pipeline?.status ?? '']
     const percent = progress(current)
     const crewLine = await read($, crew)
-    const name = [state.label, linear, crewLine, shortTitle(current.title)].filter(Boolean).join(' · ')
+    const checks = [current.tested && 'tested', current.reviewed && 'self-reviewed'].filter(Boolean).join(' + ')
+    const name = [state.label, checks, linear, crewLine, shortTitle(current.title)].filter(Boolean).join(' · ')
 
     if ('Svg' in ui) {
       const { Svg } = ui
@@ -225,6 +222,7 @@ export const register: Register = (on, options) => {
           </Text>
           <Text color={current.state === 'paused' ? 'yellow' : 'magenta'}> {barText(percent, 10)}</Text>
           <Text dimColor> {percent}%</Text>
+          {checks && <Text color="green"> ✓ {checks}</Text>}
           {linear && <Text color="magenta"> {linear}</Text>}
           {crewLine && <Text color="cyan"> ⚓ {crewLine}</Text>}
           {current.mr_status?.iid && <Text bold> !{current.mr_status.iid}</Text>}

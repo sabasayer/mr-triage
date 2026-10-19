@@ -11,18 +11,21 @@ server's API. A task is keyed by `repo + branch` — invoking this again for
 the same repo/branch updates the existing task instead of creating a
 duplicate.
 
-A task moves through these states: Working, Local test, Self-review, MR
-review, Released, Verifying, Done. Plus Paused. Most moves happen on their
+A task moves through these states: Working, MR review, Released, Verifying,
+Done. Plus Paused. "Local test" and "Self-review" are two separate checks. They
+run alongside the states, not in order. Most moves happen on their
 own (an MR opens, an MR merges and releases) or by hand in the mr-triage UI.
 
 This skill only creates a task and fills in metadata (title, Linear URL,
-MR URL). It sets `state` in two cases only, and only after the user said it
+MR URL). It sets a check in two cases only, and only after the user said it
 happened:
 
-- `local_testing`: the user says *they themselves* ran the change and
+- `local_testing`: marks the "Local test" check as done. It does not move the
+  task along the steps. Use it only when the user says *they themselves* ran the change and
   checked it (for example the dev server in the browser). "It works" or
   "tests pass" is not enough. If unclear, ask.
-- `reviewing`: the user says a review pass (for example `review-workspace`)
+- `reviewing`: marks the "Self-review" check as done. It does not move the
+  task along the steps. Use it only when the user says a review pass (for example `review-workspace`)
   has started or run on this work.
 
 Never send `paused`, `released`, `testing` or `done` from here. Those are the
@@ -77,7 +80,8 @@ curl -s -X POST http://localhost:4931/api/tasks \
   -d '{"repo":"<repo>","branch":"<branch>","state":"local_testing"}'
 ```
 
-The old `tested` and `reviewed` flags still exist in the API. Do not set them.
+`local_testing` and `reviewing` set the `tested` and `reviewed` checks. The
+current state stays the same. The user can also switch both checks in the web UI.
 
 ## Standalone usage
 

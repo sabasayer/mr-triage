@@ -360,12 +360,16 @@ svg{display:block}
 .taskbar{height:6px;border-radius:999px;background:var(--chip);overflow:hidden}
 .taskbar-fill{height:100%;border-radius:999px;background:var(--accent);transition:width .25s}
 .taskbar-fill.released,.taskbar-fill.done{background:var(--ok)}
-.taskbar-fill.testing,.taskbar-fill.local_testing{background:var(--purple)}
+.taskbar-fill.testing{background:var(--purple)}
 .taskbar-fill.paused{background:var(--warn)}
 .tasksteps{display:flex;gap:2px}
 .taskstep{flex:1;font-size:10.5px;padding:2px 0;border-radius:5px;color:var(--text-faint);background:none;text-align:center;white-space:nowrap}
 .taskstep:hover{background:var(--chip);color:var(--text)}
 .taskstep.past{color:var(--text-dim)}
+.taskchecks{display:flex;gap:6px}
+.taskcheck{font-size:10.5px;padding:2px 8px;border-radius:999px;color:var(--text-faint);background:none;border:1px solid var(--border,rgba(128,128,128,.3))}
+.taskcheck:hover{color:var(--text)}
+.taskcheck.on{color:var(--ok);border-color:var(--ok)}
 .taskstep.current{color:var(--text);font-weight:750}
 .taskcard-actions{display:flex;gap:6px;margin-left:auto}
 .taskcard-actions button{
@@ -1178,7 +1182,7 @@ setTab(activeTab);
 
 /* ── tasks tab ─────────────────────────────────────────── */
 var TASK_STEPS=[
-  ['working','Working'],['local_testing','Local test'],['reviewing','Self-review'],
+  ['working','Working'],
   ['in_review','MR review'],['released','Released'],['testing','Verifying'],['done','Done']
 ];
 var TASK_STATE_LABEL={paused:'Paused'};
@@ -1234,6 +1238,16 @@ function taskCard(t){
     steps.appendChild(b);
   });
   card.appendChild(steps);
+
+  var checks=el('div','taskchecks');
+  [['tested','Local test'],['reviewed','Self-review']].forEach(function(c){
+    var on=!!t[c[0]];
+    var b=el('button','taskcheck'+(on?' on':''),(on?'✓ ':'')+c[1]);
+    b.title=on?'Mark as not done':'Mark as done';
+    b.addEventListener('click',function(){ toggleTaskFlag(t.id,c[0],!on); });
+    checks.appendChild(b);
+  });
+  card.appendChild(checks);
 
   card.appendChild(taskMrTags(t));
   if(t.crew){
@@ -1307,7 +1321,7 @@ function renderTasks(){
     e.appendChild(document.createTextNode('Star an MR, or start work with the track-work skill.'));
     panel.appendChild(e); return;
   }
-  var order=['working','local_testing','reviewing','in_review','released','testing','paused','done'];
+  var order=['working','in_review','released','testing','paused','done'];
   visible.sort(function(a,b){ return order.indexOf(a.state)-order.indexOf(b.state) || new Date(b.updated_at)-new Date(a.updated_at); });
   var cards=el('div','taskcards');
   visible.forEach(function(t){ cards.appendChild(taskCard(t)); });
