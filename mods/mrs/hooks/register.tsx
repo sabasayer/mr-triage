@@ -12,11 +12,9 @@ const view = atom({ plugin: 'mr-triage-mrs', key: 'view' } as const, 'mrs' as Vi
 
 const compact = atom({ plugin: 'mr-triage-mrs', key: 'compact' } as const, false)
 
-const STEPS = ['working', 'local_testing', 'reviewing', 'in_review', 'released', 'testing', 'done']
+const STEPS = ['working', 'in_review', 'released', 'testing', 'done']
 const FACE: Record<string, string> = {
   working: '(•_•)',
-  local_testing: '(•_•)⚗',
-  reviewing: '(•_•)🔍',
   in_review: '(•_•)…',
   released: '\\(•‿•)/',
   testing: '(•_•)🔍',
@@ -39,8 +37,6 @@ function barText(percent: number, width: number) {
 
 const TASK_STATE: Record<string, { label: string; color: string }> = {
   working: { label: 'Working', color: 'yellow' },
-  local_testing: { label: 'Local test', color: 'cyan' },
-  reviewing: { label: 'Self-review', color: 'blue' },
   paused: { label: 'Paused', color: 'gray' },
   in_review: { label: 'In review', color: 'blue' },
   released: { label: 'Released', color: 'magenta' },
@@ -169,6 +165,8 @@ export const register: Register = (on, options) => {
                 <Text color={task.state === 'paused' ? 'yellow' : 'magenta'}> {barText(progress(task), 7)}</Text>
                 <Text dimColor> {String(progress(task)).padStart(3)}%</Text>
                 <Text color={state.color}> {state.label}</Text>
+                {task.tested && <Text color="green"> ⚗✓</Text>}
+                {task.reviewed && <Text color="green"> 🔍✓</Text>}
                 {task.crew && (
                   <Text color={task.crew.failed > 0 ? 'red' : task.crew.blocked ? 'yellow' : 'cyan'}>
                     {' '}⚓{task.crew.done}/{task.crew.total}
