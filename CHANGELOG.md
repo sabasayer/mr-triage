@@ -1,3 +1,13 @@
+# [1.3.0](https://github.com/sabasayer/mr-triage/compare/v1.2.0...v1.3.0) (2026-10-19)
+
+
+### Features
+
+* **banner:** show crew run summary for the task's ticket ([be10c90](https://github.com/sabasayer/mr-triage/commit/be10c90174240b30c7a6bddbbc5d8d3418371c23))
+* **mods:** banner progress bar with pixel mascot, pane toggle buttons and compact mode ([e0111ea](https://github.com/sabasayer/mr-triage/commit/e0111eae66f7172ccd01ce18e918410f9af16090))
+* **mrs:** show Linear ID and MR number first in task rows ([2027f7a](https://github.com/sabasayer/mr-triage/commit/2027f7a099110c00de9e61fb8813f51da3dcc6b1))
+* **tasks:** progress bar, free state moves, local test and self-review states ([508bfe6](https://github.com/sabasayer/mr-triage/commit/508bfe6b39d62eec11607360cf1849b5a58f31ae))
+
 # [1.2.0](https://github.com/sabasayer/mr-triage/compare/v1.1.0...v1.2.0) (2026-10-12)
 
 
