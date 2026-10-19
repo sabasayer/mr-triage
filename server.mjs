@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import { createServer } from "node:http";
 import { execFile } from "node:child_process";
-import { readFile, writeFile, mkdir } from "node:fs/promises";
+import { readFile, writeFile, mkdir, readdir, stat } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { dirname, join, extname } from "node:path";
 import { homedir } from "node:os";
@@ -419,9 +419,44 @@ async function refreshTaskLiveStatus() {
   }
 }
 
+function taskTicket(t) {
+  const found = t.title.match(/\b([A-Z]{2,}-\d+)\b/)?.[1]
+    || t.branch.match(/^([a-z]{2,}-\d+)-/i)?.[1]
+    || t.linear_url?.match(/\/issue\/([A-Za-z]{2,}-\d+)/)?.[1];
+  return found?.toLowerCase();
+}
+
+async function crewSummary(ticket) {
+  const root = process.env.CREW_BOARD_ROOT || join(homedir(), ".crew");
+  const names = (await readdir(root).catch(() => [])).filter((n) => n === ticket || n.startsWith(`${ticket}-mr`));
+  if (names.length === 0) return null;
+  const dated = await Promise.all(names.map(async (n) => ({ n, at: (await stat(join(root, n))).mtimeMs })));
+  const dir = join(root, dated.sort((a, b) => b.at - a.at)[0].n);
+  const files = (await readdir(dir)).filter((f) => f.endsWith(".json"));
+  const agents = await Promise.all(files.map(async (f) => {
+    try {
+      const data = JSON.parse(await readFile(join(dir, f), "utf8"));
+      return { role: String(data.role ?? f.replace(/\.json$/, "")), state: String(data.state) };
+    } catch {
+      return { role: f, state: "unreadable" };
+    }
+  }));
+  if (agents.length === 0) return null;
+  const count = (state) => agents.filter((a) => a.state === state).length;
+  return {
+    done: count("done"), total: agents.length, running: count("running"), failed: count("failed"),
+    blocked: agents.find((a) => a.state === "blocked")?.role || null,
+  };
+}
+
 async function tasksWithLiveStatus() {
   const tasks = await loadTasks();
-  return tasks.map((t) => (taskLiveStatus.has(t.id) ? { ...t, mr_status: taskLiveStatus.get(t.id) } : t));
+  return Promise.all(tasks.map(async (t) => {
+    const ticket = taskTicket(t);
+    const crew = ticket ? await crewSummary(ticket).catch(() => null) : null;
+    const withCrew = crew ? { ...t, crew } : t;
+    return taskLiveStatus.has(t.id) ? { ...withCrew, mr_status: taskLiveStatus.get(t.id) } : withCrew;
+  }));
 }
 
 const MIME = { ".html": "text/html", ".js": "text/javascript", ".css": "text/css" };

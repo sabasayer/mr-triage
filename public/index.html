@@ -1236,6 +1236,14 @@ function taskCard(t){
   card.appendChild(steps);
 
   card.appendChild(taskMrTags(t));
+  if(t.crew){
+    var c=t.crew, crewTags=el('span','tags');
+    crewTags.appendChild(el('span','tag','⚓ crew '+c.done+'/'+c.total));
+    if(c.running) crewTags.appendChild(el('span','tag muted','▶ '+c.running+' running'));
+    if(c.failed) crewTags.appendChild(el('span','tag crit','✖ '+c.failed+' failed'));
+    if(c.blocked) crewTags.appendChild(el('span','tag warn','⏸ waiting: '+c.blocked));
+    card.appendChild(crewTags);
+  }
   if(pendingTasks[t.id]){ card.classList.add('pending'); card.appendChild(el('div','taskcard-meta saving','Saving…')); }
   if(taskErrors[t.id]) card.appendChild(el('div','taskcard-error','Failed: '+taskErrors[t.id]));
   if(t.state==='paused' && t.paused_reason) card.appendChild(el('div','taskcard-meta',t.paused_reason));

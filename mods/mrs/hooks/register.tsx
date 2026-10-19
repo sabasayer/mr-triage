@@ -169,6 +169,12 @@ export const register: Register = (on, options) => {
                 <Text color={task.state === 'paused' ? 'yellow' : 'magenta'}> {barText(progress(task), 7)}</Text>
                 <Text dimColor> {String(progress(task)).padStart(3)}%</Text>
                 <Text color={state.color}> {state.label}</Text>
+                {task.crew && (
+                  <Text color={task.crew.failed > 0 ? 'red' : task.crew.blocked ? 'yellow' : 'cyan'}>
+                    {' '}⚓{task.crew.done}/{task.crew.total}
+                    {task.crew.blocked ? ` ⏸${task.crew.blocked}` : ''}
+                  </Text>
+                )}
                 <Text dimColor> {projectName(task.repo)} {shortTitle(task.title)}</Text>
               </Text>
             )

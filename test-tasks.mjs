@@ -2,7 +2,7 @@
 // server against a throwaway $HOME so it never touches ~/.mr-triage, and
 // only exercises tasks with no mr_url — that path never calls out to glab.
 import { spawn } from "node:child_process";
-import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import assert from "node:assert/strict";
@@ -99,6 +99,18 @@ try {
   const left = (await fetch(base + "/api/tasks").then((r) => r.json())).tasks;
   assert.deepEqual(left.map((t) => t.id), ["org/proj#feat/x"], "only the removed task is gone");
   await fetch(base + `/api/tasks/${abandonedId}`, { method: "DELETE" }).then((r) => assert.equal(r.status, 400, "removing an unknown task is rejected"));
+
+  const crewDir = join(home, ".crew", "eng-9-mr1");
+  await mkdir(crewDir, { recursive: true });
+  await writeFile(join(crewDir, "spec.json"), JSON.stringify({ state: "done" }));
+  await writeFile(join(crewDir, "red.json"), JSON.stringify({ state: "running" }));
+  await writeFile(join(crewDir, "gate-tests.json"), JSON.stringify({ role: "gate-tests", state: "blocked" }));
+  await fetch(base + "/api/tasks", {
+    method: "POST", body: JSON.stringify({ repo: "org/proj", branch: "feat/crewed", title: "ENG-9: crewed" }),
+  });
+  const crewed = (await fetch(base + "/api/tasks").then((r) => r.json())).tasks.find((t) => t.branch === "feat/crewed");
+  assert.deepEqual(crewed.crew, { done: 1, total: 3, running: 1, failed: 0, blocked: "gate-tests" }, "crew run is matched by ticket");
+  await fetch(base + `/api/tasks/${encodeURIComponent(crewed.id)}`, { method: "DELETE" });
 
   const stored = JSON.parse(await readFile(join(home, ".mr-triage", "tasks.json"), "utf8"));
   assert.equal(stored.length, 1, "one task on disk, upserted not duplicated");

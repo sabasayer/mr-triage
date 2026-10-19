@@ -17,6 +17,7 @@ export type Task = {
   title: string
   state: string
   paused_from?: string
+  crew?: { done: number; total: number; running: number; failed: number; blocked: string | null }
   tested?: boolean
   reviewed?: boolean
   mr_status?: { iid: number; pipeline?: { status: string } }
