@@ -1,3 +1,10 @@
+# [1.5.0](https://github.com/sabasayer/mr-triage/compare/v1.4.0...v1.5.0) (2026-10-19)
+
+
+### Features
+
+* **tasks:** make local test and self-review parallel checks ([a271e2f](https://github.com/sabasayer/mr-triage/commit/a271e2f87f866f5c9a80d7d11c5e33f3c8c497b0))
+
 # [1.4.0](https://github.com/sabasayer/mr-triage/compare/v1.3.0...v1.4.0) (2026-10-19)
 
 
