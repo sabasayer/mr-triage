@@ -162,15 +162,14 @@ export const register: Register = (on, options) => {
 
             return (
               <Text wrap="truncate-end">
-                <Text color={state.color}>{(FACE[task.state] ?? '(•_•)').padEnd(8)} {state.label.padEnd(11)}</Text>
+                <Text color={pipeline?.color ?? NO_PIPELINE.color}>{pipeline?.icon ?? NO_PIPELINE.icon}</Text>
+                {linear && <Text color="magenta"> {linear}</Text>}
+                {task.mr_status?.iid && <Text bold> !{task.mr_status.iid}</Text>}
+                <Text color={state.color}> {FACE[task.state] ?? '(•_•)'}</Text>
                 <Text color={task.state === 'paused' ? 'yellow' : 'magenta'}> {barText(progress(task), 7)}</Text>
                 <Text dimColor> {String(progress(task)).padStart(3)}%</Text>
-                <Text dimColor> {projectName(task.repo)}</Text>
-                {task.mr_status?.iid && <Text bold> !{task.mr_status.iid}</Text>}
-                {linear && <Text color="magenta"> {linear}</Text>}
-                {pipeline && <Text color={pipeline.color}> {pipeline.icon}</Text>}
-                {task.tested && <Text color="green"> tested ✔</Text>}
-                {task.reviewed && <Text color="green"> reviewed ✔</Text>} <Text dimColor>{shortTitle(task.title)}</Text>
+                <Text color={state.color}> {state.label}</Text>
+                <Text dimColor> {projectName(task.repo)} {shortTitle(task.title)}</Text>
               </Text>
             )
           })}
