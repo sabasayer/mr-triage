@@ -2,7 +2,7 @@
 // server against a throwaway $HOME so it never touches ~/.mr-triage, and
 // only exercises tasks with no mr_url — that path never calls out to glab.
 import { spawn } from "node:child_process";
-import { mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, mkdir, readFile, rm, utimes, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import assert from "node:assert/strict";
@@ -117,6 +117,26 @@ try {
   const crewed = (await fetch(base + "/api/tasks").then((r) => r.json())).tasks.find((t) => t.branch === "feat/crewed");
   assert.deepEqual(crewed.crew, { done: 1, total: 3, running: 1, failed: 0, blocked: "gate-tests" }, "crew run is matched by ticket");
   await fetch(base + `/api/tasks/${encodeURIComponent(crewed.id)}`, { method: "DELETE" });
+
+  const upper = join(home, ".crew", "ENG-2750-mr1");
+  await mkdir(upper, { recursive: true });
+  await writeFile(join(upper, "spec.json"), JSON.stringify({ state: "done" }));
+  await utimes(upper, new Date(1000), new Date(1000));
+  await fetch(base + "/api/tasks", {
+    method: "POST", body: JSON.stringify({ repo: "org/proj", branch: "feat/upper", title: "ENG-2750: upper" }),
+  });
+  const findUpper = async () => (await fetch(base + "/api/tasks").then((r) => r.json())).tasks.find((t) => t.branch === "feat/upper");
+  assert.equal((await findUpper()).crew?.total, 1, "uppercase run folder matches a lowercase ticket");
+  const lower = join(home, ".crew", "eng-2750-mr2");
+  await mkdir(lower, { recursive: true });
+  await writeFile(join(lower, "spec.json"), JSON.stringify({ state: "done" }));
+  await writeFile(join(lower, "red.json"), JSON.stringify({ state: "done" }));
+  assert.equal((await findUpper()).crew?.total, 2, "lowercase folder matches too, newest folder wins");
+  const bare = join(home, ".crew", "ENG-2750");
+  await mkdir(bare, { recursive: true });
+  await writeFile(join(bare, "mr-description.md"), "x");
+  assert.equal((await findUpper()).crew?.total, 2, "a newer folder without agent files is ignored");
+  await fetch(base + `/api/tasks/${encodeURIComponent("org/proj#feat/upper")}`, { method: "DELETE" });
 
   const stored = JSON.parse(await readFile(join(home, ".mr-triage", "tasks.json"), "utf8"));
   assert.equal(stored.length, 1, "one task on disk, upserted not duplicated");

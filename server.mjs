@@ -445,11 +445,17 @@ function taskTicket(t) {
 
 async function crewSummary(ticket) {
   const root = process.env.CREW_BOARD_ROOT || join(homedir(), ".crew");
-  const names = (await readdir(root).catch(() => [])).filter((n) => n === ticket || n.startsWith(`${ticket}-mr`));
-  if (names.length === 0) return null;
-  const dated = await Promise.all(names.map(async (n) => ({ n, at: (await stat(join(root, n))).mtimeMs })));
-  const dir = join(root, dated.sort((a, b) => b.at - a.at)[0].n);
-  const files = (await readdir(dir)).filter((f) => f.endsWith(".json"));
+  const names = (await readdir(root).catch(() => [])).filter((n) => {
+    const name = n.toLowerCase();
+    return name === ticket.toLowerCase() || name.startsWith(`${ticket.toLowerCase()}-mr`);
+  });
+  const runs = (await Promise.all(names.map(async (n) => {
+    const files = (await readdir(join(root, n))).filter((f) => f.endsWith(".json"));
+    return { n, files, at: (await stat(join(root, n))).mtimeMs };
+  }))).filter((r) => r.files.length > 0);
+  if (runs.length === 0) return null;
+  const { n: newest, files } = runs.sort((a, b) => b.at - a.at)[0];
+  const dir = join(root, newest);
   const agents = await Promise.all(files.map(async (f) => {
     try {
       const data = JSON.parse(await readFile(join(dir, f), "utf8"));
