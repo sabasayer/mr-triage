@@ -1,3 +1,10 @@
+## [1.5.1](https://github.com/sabasayer/mr-triage/compare/v1.5.0...v1.5.1) (2026-10-21)
+
+
+### Bug Fixes
+
+* **tasks:** match crew run folders without regard to case ([a5f7541](https://github.com/sabasayer/mr-triage/commit/a5f7541bf2bd46ca938f68a41e6655cc822b0bfe))
+
 # [1.5.0](https://github.com/sabasayer/mr-triage/compare/v1.4.0...v1.5.0) (2026-10-19)
 
 
