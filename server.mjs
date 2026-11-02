@@ -6,6 +6,7 @@ import { fileURLToPath } from "node:url";
 import { dirname, join, extname } from "node:path";
 import { homedir } from "node:os";
 import { buildQuery, mapPullRequest, prKey } from "./github.mjs";
+import { repoKey, groupByRepo, isStringList } from "./view.mjs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const PORT = process.env.PORT || 4931;
@@ -308,19 +309,13 @@ async function loadMrs() {
     }
   }
 
-  const shortByPath = new Map(repos.filter((r) => r.short).map((r) => [r.path, r.short]));
-
-  const groups = new Map();
-  for (const d of details) {
-    if (!groups.has(d.project)) groups.set(d.project, []);
-    groups.get(d.project).push(d);
-  }
+  const shortByRepo = new Map(repos.filter((r) => r.short).map((r) => [repoKey(r.host, r.path), r.short]));
 
   const byUrgencyThenRecency = (a, b) =>
     Number(b.urgent) - Number(a.urgent) || new Date(b.updated_at) - new Date(a.updated_at);
 
-  const sortedGroups = [...groups.entries()]
-    .map(([project, mrs]) => ({ project, short: shortByPath.get(project) ?? null, mrs: mrs.sort(byUrgencyThenRecency) }))
+  const sortedGroups = groupByRepo(details)
+    .map(({ host, project, mrs }) => ({ host, project, short: shortByRepo.get(repoKey(host, project)) ?? null, mrs: mrs.sort(byUrgencyThenRecency) }))
     .sort((a, b) => Number(b.mrs.some((m) => m.urgent)) - Number(a.mrs.some((m) => m.urgent)) || a.project.localeCompare(b.project));
 
   console.log(`[mr-triage] refresh done: ${sortedGroups.length} group(s), ${details.length} MR(s) shown`);
@@ -340,13 +335,33 @@ async function refresh() {
 }
 
 const HIDDEN_FILE = join(CONFIG_DIR, "hidden-authors.json");
+const HIDDEN_REPOS_FILE = join(CONFIG_DIR, "hidden-repos.json");
 
-async function loadHiddenAuthors() {
+async function loadStringList(file) {
   try {
-    return JSON.parse(await readFile(HIDDEN_FILE, "utf8"));
+    return JSON.parse(await readFile(file, "utf8"));
   } catch {
     return [];
   }
+}
+
+async function serveStringList(req, res, file) {
+  if (req.method === "PUT") {
+    let body = "";
+    for await (const chunk of req) body += chunk;
+    try {
+      const list = JSON.parse(body || "[]");
+      if (!isStringList(list)) throw new Error("expected string[]");
+      await mkdir(dirname(file), { recursive: true });
+      await writeFile(file, JSON.stringify(list));
+    } catch (err) {
+      res.writeHead(400, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ error: err.message }));
+      return;
+    }
+  }
+  res.writeHead(200, { "Content-Type": "application/json" });
+  res.end(JSON.stringify(await loadStringList(file)));
 }
 
 const MIME = { ".html": "text/html", ".js": "text/javascript", ".css": "text/css" };
@@ -360,25 +375,8 @@ const server = createServer(async (req, res) => {
     return;
   }
 
-  if (url.pathname === "/api/hidden-authors") {
-    if (req.method === "PUT") {
-      let body = "";
-      for await (const chunk of req) body += chunk;
-      try {
-        const authors = JSON.parse(body || "[]");
-        if (!Array.isArray(authors) || !authors.every((a) => typeof a === "string")) throw new Error("expected string[]");
-        await mkdir(dirname(HIDDEN_FILE), { recursive: true });
-        await writeFile(HIDDEN_FILE, JSON.stringify(authors));
-      } catch (err) {
-        res.writeHead(400, { "Content-Type": "application/json" });
-        res.end(JSON.stringify({ error: err.message }));
-        return;
-      }
-    }
-    res.writeHead(200, { "Content-Type": "application/json" });
-    res.end(JSON.stringify(await loadHiddenAuthors()));
-    return;
-  }
+  if (url.pathname === "/api/hidden-authors") return serveStringList(req, res, HIDDEN_FILE);
+  if (url.pathname === "/api/hidden-repos") return serveStringList(req, res, HIDDEN_REPOS_FILE);
 
   const jobsMatch = url.pathname.match(/^\/api\/pipelines\/(\d+)\/(\d+)\/jobs$/);
   if (jobsMatch && req.method === "GET") {

@@ -25,6 +25,7 @@
   "files": [
     "server.mjs",
     "github.mjs",
+    "view.mjs",
     "public"
   ],
   "engines": {

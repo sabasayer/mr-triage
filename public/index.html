@@ -342,6 +342,11 @@ svg{display:block}
       <button id="byRepo" aria-pressed="true">Repo</button>
       <button id="byAuthor" aria-pressed="false">Author</button>
     </div>
+    <div class="seg" id="sourceSeg" role="group" aria-label="Source" style="display:none">
+      <button id="srcAll" aria-pressed="true">All</button>
+      <button id="srcGitlab" aria-pressed="false">GitLab</button>
+      <button id="srcGithub" aria-pressed="false">GitHub</button>
+    </div>
     <div class="seg" role="group" aria-label="Sort by">
       <button id="sortPriority" aria-pressed="true">Priority</button>
       <button id="sortDate" aria-pressed="false">Date</button>
@@ -411,11 +416,46 @@ function syncHiddenAuthors(){
     render();
   }).catch(function(){});
 }
+var LS_HIDDEN_REPOS='wf.hiddenRepos';
+var hiddenRepos = new Set();
+try{ (JSON.parse(localStorage.getItem(LS_HIDDEN_REPOS))||[]).forEach(function(k){hiddenRepos.add(k);}); }catch(e){}
+function repoKey(host,project){ return (host||'gitlab')+':'+project; }
+function groupKey(g){ return repoKey(g.host,g.project); }
+function toggleHiddenRepo(key){
+  if(hiddenRepos.has(key)) hiddenRepos.delete(key); else hiddenRepos.add(key);
+  saveHiddenRepos();
+  render();
+}
+function saveHiddenRepos(){
+  var list=Array.from(hiddenRepos);
+  localStorage.setItem(LS_HIDDEN_REPOS, JSON.stringify(list));
+  fetch('/api/hidden-repos',{method:'PUT',body:JSON.stringify(list)}).catch(function(){});
+}
+function syncHiddenRepos(){
+  fetch('/api/hidden-repos').then(function(r){ return r.json(); }).then(function(list){
+    if(!list.length && hiddenRepos.size){ saveHiddenRepos(); return; }
+    hiddenRepos=new Set(list);
+    localStorage.setItem(LS_HIDDEN_REPOS, JSON.stringify(list));
+    render();
+  }).catch(function(){});
+}
+function activeGroups(){ return (data&&data.groups||[]).filter(function(g){ return !hiddenRepos.has(groupKey(g)); }); }
+
+var LS_SOURCE='wf.source', SOURCES=['all','gitlab','github'];
+var source = SOURCES.indexOf(localStorage.getItem(LS_SOURCE))>=0 ? localStorage.getItem(LS_SOURCE) : 'all';
+function sourceOf(mr){ return mr.host==='github' ? 'github' : 'gitlab'; }
+function hasBothSources(){
+  var seen={};
+  (data&&data.groups||[]).forEach(function(g){ g.mrs.forEach(function(m){ seen[sourceOf(m)]=true; }); });
+  return !!(seen.gitlab && seen.github);
+}
 function linearId(mr){
   var m=(mr.title||'').match(/\b([A-Z]{2,}-\d+)\b/) || (mr.source_branch||'').match(/^([a-z]{2,}-\d+)-/i);
   return m ? m[1].toUpperCase() : null;
 }
-function visible(mr){ return !hiddenAuthors.has(mr.author); }
+function visible(mr){
+  return !hiddenAuthors.has(mr.author) && (!hasBothSources() || source==='all' || sourceOf(mr)===source);
+}
 
 var data=null, fetchedAt=null, fetchError=null, demo=false, tickTimer=null;
 var seenGroups = new Set();   // groups we've already applied default-collapse to
@@ -492,7 +532,7 @@ function checkTransitions(groups){
   var seen=new Set();
   groups.forEach(function(g){
     g.mrs.forEach(function(mr){
-      if(hiddenAuthors.has(mr.author)) return;
+      if(hiddenAuthors.has(mr.author) || hiddenRepos.has(groupKey(g))) return;
       seen.add(mr.web_url);
       var prev=prevMrState.get(mr.web_url);
       var ps=pstat(mr);
@@ -682,9 +722,10 @@ var I={
 /* ── grouping ──────────────────────────────────────────── */
 function buildWatched(){
   if(!data||!data.groups) return [];
-  return data.groups
+  return activeGroups()
     .filter(function(g){ return favorites.has(g.project); })
-    .map(function(g){ return {key:'repo:'+g.project, label:g.project, kind:'repo', short:g.short, mrs:sortRows(g.mrs.filter(visible)), bot:false}; })
+    .map(function(g){ return {key:'repo:'+g.project, label:g.project, kind:'repo', host:g.host, short:g.short, mrs:sortRows(g.mrs.filter(visible)), bot:false}; })
+    .filter(function(g){ return g.mrs.length; })
     .sort(function(a,b){ return Number(b.mrs.some(function(m){return level(m)==='crit';})) - Number(a.mrs.some(function(m){return level(m)==='crit';})) || a.label.localeCompare(b.label); });
 }
 
@@ -692,14 +733,14 @@ function buildGroups(){
   var groups=[];
   if(!data||!data.groups) return groups;
   if(mode==='repo'){
-    data.groups.filter(function(g){ return !favorites.has(g.project); }).forEach(function(g){
+    activeGroups().filter(function(g){ return !favorites.has(g.project); }).forEach(function(g){
       var mrs=g.mrs.filter(visible);
       if(!mrs.length) return;
-      groups.push({key:'repo:'+g.project, label:g.project, kind:'repo', short:g.short, mrs:sortRows(mrs), bot:false});
+      groups.push({key:'repo:'+g.project, label:g.project, kind:'repo', host:g.host, short:g.short, mrs:sortRows(mrs), bot:false});
     });
   }else{
     var by={};
-    data.groups.forEach(function(g){
+    activeGroups().forEach(function(g){
       if(favorites.has(g.project)) return;
       g.mrs.forEach(function(mr){
         var a=mr.author||'unknown';
@@ -724,7 +765,7 @@ function buildGroups(){
 /* ── render ────────────────────────────────────────────── */
 function render(){
   document.body.classList.toggle('view-grid', viewMode==='grid');
-  renderStatus(); renderWarnings(); renderHidden();
+  renderStatus(); renderWarnings(); renderHidden(); renderSource();
 
   var watched=$('#watched'); watched.textContent='';
   var watchedGroups=buildWatched();
@@ -737,7 +778,7 @@ function render(){
   list.textContent='';
 
   var crit=0;
-  (data&&data.groups||[]).forEach(function(g){ g.mrs.filter(visible).forEach(function(m){ if(level(m)==='crit') crit++; }); });
+  activeGroups().forEach(function(g){ g.mrs.filter(visible).forEach(function(m){ if(level(m)==='crit') crit++; }); });
   var alarm=$('#alarm');
   alarm.classList.toggle('on', crit>0);
   $('#alarmText').textContent = crit + (crit===1?' needs attention':' need attention');
@@ -803,6 +844,10 @@ function groupEl(g,opts){
     favBtn.title=isFav?'Unwatch':'Watch this repo';
     favBtn.addEventListener('click',function(e){ e.preventDefault(); e.stopPropagation(); toggleFavorite(g.label); });
     meta.appendChild(favBtn);
+    var repoHideBtn=el('button','favBtn','🙈');
+    repoHideBtn.title='Hide this repo';
+    repoHideBtn.addEventListener('click',function(e){ e.preventDefault(); e.stopPropagation(); toggleHiddenRepo(repoKey(g.host,g.label)); });
+    meta.appendChild(repoHideBtn);
   }
   if(g.kind==='author' && !opts.pinned){
     var hideBtn=el('button','favBtn','🙈');
@@ -915,17 +960,28 @@ function renderStatus(){
 
 function renderHidden(){
   var box=$('#hiddenBar'); box.textContent='';
-  if(!hiddenAuthors.size) return;
+  if(!hiddenAuthors.size && !hiddenRepos.size) return;
   var d=el('div','hiddenbar');
   d.appendChild(document.createTextNode('Hidden:'));
-  Array.from(hiddenAuthors).sort().forEach(function(a){
-    var chip=el('span','hidechip'); chip.appendChild(document.createTextNode(a));
-    var x=el('button',null,'✕'); x.title='Unhide '+a;
-    x.addEventListener('click',function(){ toggleHiddenAuthor(a); });
-    chip.appendChild(x);
-    d.appendChild(chip);
+  function chip(text,title,onClick){
+    var c=el('span','hidechip'); c.appendChild(document.createTextNode(text));
+    var x=el('button',null,'✕'); x.title=title;
+    x.addEventListener('click',onClick);
+    c.appendChild(x);
+    d.appendChild(c);
+  }
+  Array.from(hiddenAuthors).sort().forEach(function(a){ chip(a,'Unhide '+a,function(){ toggleHiddenAuthor(a); }); });
+  Array.from(hiddenRepos).sort().forEach(function(k){
+    var name=k.replace(/^gitlab:/,'');
+    chip(name,'Unhide '+name,function(){ toggleHiddenRepo(k); });
   });
   box.appendChild(d);
+}
+
+function renderSource(){
+  var both=hasBothSources(), active=both ? source : 'all';
+  $('#sourceSeg').style.display = both ? '' : 'none';
+  SOURCES.forEach(function(s){ $('#src'+s[0].toUpperCase()+s.slice(1)).setAttribute('aria-pressed', String(s===active)); });
 }
 
 function renderWarnings(){
@@ -1026,6 +1082,14 @@ $('#byAuthor').addEventListener('click',function(){ setMode('author'); });
 $('#byRepo').setAttribute('aria-pressed', String(mode==='repo'));
 $('#byAuthor').setAttribute('aria-pressed', String(mode==='author'));
 
+/* ── source toggle ─────────────────────────────────────── */
+SOURCES.forEach(function(s){
+  $('#src'+s[0].toUpperCase()+s.slice(1)).addEventListener('click',function(){
+    source=s; localStorage.setItem(LS_SOURCE,s);
+    render();
+  });
+});
+
 /* ── sort toggle ───────────────────────────────────────── */
 function setSort(s){
   sortMode=s; localStorage.setItem(LS_SORT,s);
@@ -1093,6 +1157,7 @@ var DEMO_DATA={
 };
 
 syncHiddenAuthors();
+syncHiddenRepos();
 load();
 })();
 </script>
