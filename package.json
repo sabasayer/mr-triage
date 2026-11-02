@@ -1,6 +1,6 @@
 {
   "name": "mr-triage",
-  "version": "2.0.0",
+  "version": "2.1.0",
   "description": "A local GitLab and GitHub MR/PR dashboard — replaces manually checking the MR pages.",
   "license": "MIT",
   "author": "Salih Sayer",

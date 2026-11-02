@@ -1,3 +1,11 @@
+# [2.1.0](https://github.com/sabasayer/mr-triage/compare/v2.0.0...v2.1.0) (2026-11-02)
+
+
+### Features
+
+* filter by source and hide repos ([d96ea7e](https://github.com/sabasayer/mr-triage/commit/d96ea7e3b6de3e55e8972bb8186884640f3d2dd0))
+* read GitHub pull requests through gh ([d0a32c9](https://github.com/sabasayer/mr-triage/commit/d0a32c9921d436c98311d7fca76261daf026765d))
+
 # [2.0.0](https://github.com/sabasayer/mr-triage/compare/v1.5.1...v2.0.0) (2026-11-02)
 
 
