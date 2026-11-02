@@ -1,0 +1,59 @@
+{
+  "number": 8,
+  "title": "feat: thing",
+  "url": "https://github.com/acme/app/pull/7",
+  "isDraft": false,
+  "updatedAt": "2026-11-01T10:00:00Z",
+  "headRefName": "feat/thing",
+  "author": {
+    "login": "alice"
+  },
+  "repository": {
+    "nameWithOwner": "acme/app"
+  },
+  "reviewDecision": null,
+  "mergeable": "MERGEABLE",
+  "mergeStateStatus": "CLEAN",
+  "reviewRequests": {
+    "totalCount": 0
+  },
+  "latestReviews": {
+    "totalCount": 0
+  },
+  "comments": {
+    "totalCount": 0
+  },
+  "reviewThreads": {
+    "nodes": [
+      {
+        "isResolved": true
+      },
+      {
+        "isResolved": false
+      }
+    ]
+  },
+  "commits": {
+    "nodes": [
+      {
+        "commit": {
+          "statusCheckRollup": {
+            "state": "FAILURE",
+            "contexts": {
+              "nodes": [
+                {
+                  "__typename": "CheckRun",
+                  "status": "COMPLETED"
+                },
+                {
+                  "__typename": "CheckRun",
+                  "status": "COMPLETED"
+                }
+              ]
+            }
+          }
+        }
+      }
+    ]
+  }
+}

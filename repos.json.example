@@ -2,5 +2,7 @@
   "acme/webapp-widgets",
   { "path": "acme/webapp-viewer", "short": "VW" },
   { "path": "acme/webapp-prefetch", "short": "PF" },
-  { "path": "acme/webapp-base", "short": "BS" }
+  { "path": "acme/webapp-base", "short": "BS" },
+  "github:acme/api",
+  { "path": "acme/web", "host": "github", "short": "WB" }
 ]
