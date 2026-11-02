@@ -10,7 +10,7 @@ export type Mr = {
   has_conflicts: boolean
   pipeline?: { status: string }
 }
-export type Group = { project: string; mrs: Mr[] }
+export type Group = { host?: string; project: string; mrs: Mr[] }
 export type Mrs = { groups: Group[]; error?: string }
 
 declare module 'claude-code' {

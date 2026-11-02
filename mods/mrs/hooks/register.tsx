@@ -37,13 +37,16 @@ function projectName(project: string) {
 
 async function refresh($: EngineInterface, base: string) {
   try {
-    const [res, hiddenRes] = await Promise.all([
+    const [res, hiddenRes, hiddenReposRes] = await Promise.all([
       $.http.fetch(`${base}/api/mrs`),
       $.http.fetch(`${base}/api/hidden-authors`),
+      $.http.fetch(`${base}/api/hidden-repos`),
     ])
     const data = JSON.parse(res.text)
     const hidden = new Set<string>(hiddenRes.ok ? JSON.parse(hiddenRes.text) : [])
+    const hiddenRepos = new Set<string>(hiddenReposRes.ok ? JSON.parse(hiddenReposRes.text) : [])
     const groups = (data.groups ?? [])
+      .filter((group: Group) => !hiddenRepos.has(`${group.host ?? 'gitlab'}:${group.project}`))
       .map((group: Group) => ({ ...group, mrs: group.mrs.filter(mr => !hidden.has(mr.author)) }))
       .filter((group: Group) => group.mrs.length > 0)
     await update($, mrs, () => ({ groups }))
