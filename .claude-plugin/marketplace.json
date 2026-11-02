@@ -2,7 +2,6 @@
   "name": "mr-triage",
   "owner": { "name": "Salih Sayer" },
   "plugins": [
-    { "name": "mr-triage-mrs", "source": "./mods/mrs" },
-    { "name": "mr-triage-banner", "source": "./mods/banner" }
+    { "name": "mr-triage-mrs", "source": "./mods/mrs" }
   ]
 }
