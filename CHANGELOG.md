@@ -1,3 +1,18 @@
+# [2.0.0](https://github.com/sabasayer/mr-triage/compare/v1.5.1...v2.0.0) (2026-11-02)
+
+
+* feat!: remove the Tasks feature ([09177d7](https://github.com/sabasayer/mr-triage/commit/09177d7e77f732704c652ab4f5020b97ff221ea0))
+
+
+### BREAKING CHANGES
+
+* The Tasks tab, the /api/tasks routes, the track-work
+skill and the banner mod (mr-triage-banner) are gone. The /mr-tasks
+command is gone from mr-triage-mrs. The file ~/.mr-triage/tasks.json is
+no longer read. It stays on disk, untouched.
+
+Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>
+
 ## [1.5.1](https://github.com/sabasayer/mr-triage/compare/v1.5.0...v1.5.1) (2026-10-21)
 
 
