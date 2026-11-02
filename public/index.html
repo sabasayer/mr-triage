@@ -248,11 +248,8 @@ button.tag{cursor:pointer}
   color:var(--text-faint);opacity:0;transition:opacity .1s;
 }
 .acts button.copy{opacity:.38}
-.acts button.fav{font-size:14px;opacity:.38}
-.acts button.fav.on{opacity:1;color:var(--warn)}
 .row:hover .acts button,.acts button:focus-visible,.acts button.busy,.acts button.done{opacity:1}
 .acts button:hover{background:var(--chip);color:var(--text)}
-.acts button.fav:hover{color:var(--warn)}
 .acts button.retry{color:var(--crit);opacity:.85}
 .acts button.retry:hover{background:var(--crit-bg);color:var(--crit);opacity:1}
 .acts button.done{color:var(--ok)}
@@ -329,63 +326,8 @@ svg{display:block}
   .viewToggle{display:none}
 }
 
-/* ── tasks tab ─────────────────────────────────────────── */
-.taskcards{display:flex;flex-direction:column;gap:8px}
-.taskcard{
-  background:var(--panel);border:1px solid var(--line-strong);border-radius:10px;
-  padding:10px 12px;box-shadow:var(--shadow);
-  display:flex;flex-direction:column;gap:6px;
-}
-.taskcard-top{display:flex;align-items:center;gap:8px}
-.taskcard .title{font-weight:600;font-size:13.5px}
-.statebadge{font-size:10.5px;font-weight:750;letter-spacing:.04em;text-transform:uppercase;padding:2px 7px;border-radius:999px;flex:none}
-.statebadge.local_testing{color:var(--purple);background:rgba(128,77,161,.12)}
-.statebadge.reviewing{color:var(--blue);background:rgba(77,97,229,.12)}
-.statebadge.working{color:var(--text-dim);background:var(--chip)}
-.statebadge.in_review{color:var(--blue);background:rgba(77,97,229,.12)}
-.statebadge.released{color:var(--ok);background:rgba(14,158,105,.12)}
-.statebadge.testing{color:var(--purple);background:rgba(128,77,161,.12)}
-.statebadge.paused{color:var(--warn);background:var(--warn-bg)}
-.statebadge.done{color:var(--text-faint);background:var(--chip)}
-.taskcard-meta{font-size:11.5px;color:var(--text-faint);display:flex;gap:8px;flex-wrap:wrap}
-.taskcard-meta a{color:inherit}
-.pausereason{font:inherit;font-size:12px;padding:3px 8px;border:1px solid var(--line-strong);border-radius:6px;background:var(--panel);color:var(--text);min-width:220px}
-.taskcard.pending{opacity:.7}
-.taskcard .saving::before{content:"";display:inline-block;width:10px;height:10px;margin-right:6px;vertical-align:-1px;border:2px solid var(--line-strong);border-top-color:var(--accent);border-radius:50%;animation:spin .8s linear infinite}
-.taskcard-error{font-size:11.5px;color:var(--crit);background:var(--crit-bg);border:1px solid var(--crit-line);border-radius:6px;padding:3px 8px}
-.fav.busy{animation:pulse 1s infinite}
 #toast{position:fixed;right:16px;bottom:16px;max-width:360px;padding:8px 12px;border-radius:8px;font-size:12.5px;color:var(--crit);background:var(--panel);border:1px solid var(--crit-line);box-shadow:0 4px 16px rgba(0,0,0,.18);z-index:50}
 #toast[hidden]{display:none}
-.taskpct{margin-left:auto;font-size:11.5px;font-weight:700;color:var(--text-dim);flex:none}
-.taskbar{height:6px;border-radius:999px;background:var(--chip);overflow:hidden}
-.taskbar-fill{height:100%;border-radius:999px;background:var(--accent);transition:width .25s}
-.taskbar-fill.released,.taskbar-fill.done{background:var(--ok)}
-.taskbar-fill.testing{background:var(--purple)}
-.taskbar-fill.paused{background:var(--warn)}
-.tasksteps{display:flex;gap:2px}
-.taskstep{flex:1;font-size:10.5px;padding:2px 0;border-radius:5px;color:var(--text-faint);background:none;text-align:center;white-space:nowrap}
-.taskstep:hover{background:var(--chip);color:var(--text)}
-.taskstep.past{color:var(--text-dim)}
-.taskchecks{display:flex;gap:6px}
-.taskcheck{font-size:10.5px;padding:2px 8px;border-radius:999px;color:var(--text-faint);background:none;border:1px solid var(--border,rgba(128,128,128,.3))}
-.taskcheck:hover{color:var(--text)}
-.taskcheck.on{color:var(--ok);border-color:var(--ok)}
-.taskstep.current{color:var(--text);font-weight:750}
-.taskcard-actions{display:flex;gap:6px;margin-left:auto}
-.taskcard-actions button{
-  font-size:11.5px;font-weight:650;padding:3px 9px;border-radius:6px;
-  background:var(--accent);color:#fff;
-}
-.taskcard-actions button.secondary{background:var(--chip);color:var(--text)}
-.taskcard-actions button.armed{background:var(--crit-bg);color:var(--crit)}
-.showdone{font-size:11.5px;color:var(--text-faint);display:flex;align-items:center;gap:5px;margin-bottom:10px}
-.flagbadge{
-  font-size:10.5px;font-weight:650;padding:1px 7px;border-radius:999px;flex:none;
-  color:var(--text-faint);background:var(--chip);border:1px solid var(--line);
-  margin-left:auto;
-}
-.flagbadge+.flagbadge{margin-left:0}
-.flagbadge.on{color:var(--ok);background:rgba(14,158,105,.12);border-color:rgba(14,158,105,.35)}
 </style>
 </head>
 <body>
@@ -395,10 +337,6 @@ svg{display:block}
       <span class="dots"><i></i><i></i><i></i></span>
       <b>MR Triage</b>
       <span class="alarm" id="alarm"><span class="pulse"></span><span id="alarmText"></span></span>
-    </div>
-    <div class="seg" role="group" aria-label="Tab">
-      <button id="tabMrs" aria-pressed="true">MRs</button>
-      <button id="tabTasks" aria-pressed="false">Tasks</button>
     </div>
     <div class="seg" role="group" aria-label="Group by">
       <button id="byRepo" aria-pressed="true">Repo</button>
@@ -429,7 +367,6 @@ svg{display:block}
     <div id="watched"></div>
     <main id="list"></main>
   </div>
-  <div id="tasksPanel" hidden></div>
 </div>
 
 <script>
@@ -482,7 +419,6 @@ function visible(mr){ return !hiddenAuthors.has(mr.author); }
 
 var data=null, fetchedAt=null, fetchError=null, demo=false, tickTimer=null;
 var seenGroups = new Set();   // groups we've already applied default-collapse to
-var tasks=[], tasksLoaded=false, activeTab = localStorage.getItem('wf.tab')==='tasks' ? 'tasks' : 'mrs';
 
 var BOT=/bot|renovate|dependabot/i;
 var $=function(s){return document.querySelector(s);};
@@ -491,7 +427,6 @@ var $=function(s){return document.querySelector(s);};
 var POLL_MS=15000, nextPollAt=Date.now()+POLL_MS;
 function load(){
   nextPollAt=Date.now()+POLL_MS;
-  loadTasks();
   if(demo){ apply(DEMO_DATA); return; }
   fetch('/api/mrs',{headers:{'Accept':'application/json'}})
     .then(function(r){
@@ -514,53 +449,11 @@ function apply(d){
   render();
 }
 
-function loadTasks(){
-  if(demo) return Promise.resolve();
-  return fetch('/api/tasks',{headers:{'Accept':'application/json'}})
-    .then(function(r){ return r.json(); })
-    .then(function(d){ tasks=d.tasks||[]; tasksLoaded=true; if(activeTab==='tasks') renderTasks(); })
-    .catch(function(){});
-}
-
-function isTracked(mrUrl){ return tasks.some(function(t){ return t.mr_url===mrUrl; }); }
-function api(url,body,method){
-  return fetch(url,{method:method||'POST', headers:{'Content-Type':'application/json'}, body:body===undefined?undefined:JSON.stringify(body)})
-    .then(function(r){
-      return r.json().catch(function(){ return {}; }).then(function(d){
-        if(!r.ok) throw new Error(d.error||('HTTP '+r.status));
-        return d;
-      });
-    });
-}
 var toastTimer;
 function toast(msg){
   var n=$('#toast'); n.textContent=msg; n.hidden=false;
   clearTimeout(toastTimer); toastTimer=setTimeout(function(){ n.hidden=true; },6000);
 }
-var pendingTasks={}, taskErrors={}, pendingTracks={};
-function runTaskAction(id,url,body,method){
-  pendingTasks[id]=true; delete taskErrors[id]; renderTasks();
-  api(url,body,method).then(loadTasks)
-    .catch(function(err){ taskErrors[id]=err.message||'Request failed'; })
-    .then(function(){ delete pendingTasks[id]; renderTasks(); render(); });
-}
-function trackMr(mr){
-  pendingTracks[mr.web_url]=true; render();
-  api('/api/tasks',{ repo: mr.project || mr._project, branch: mr.source_branch || ('mr-'+mr.iid), title: mr.title, mr_url: mr.web_url })
-    .then(loadTasks)
-    .catch(function(err){ toast('Could not track MR: '+(err.message||'request failed')); })
-    .then(function(){ delete pendingTracks[mr.web_url]; render(); });
-}
-function removeTask(id){
-  runTaskAction(id,'/api/tasks/'+encodeURIComponent(id),undefined,'DELETE');
-}
-function transitionTask(id,state,reason){
-  runTaskAction(id,'/api/tasks/'+encodeURIComponent(id)+'/state',{state:state,reason:reason});
-}
-function toggleTaskFlag(id,flag,value){
-  runTaskAction(id,'/api/tasks/'+encodeURIComponent(id)+'/flag',{flag:flag,value:value});
-}
-
 /* ── notifications ─────────────────────────────────────── */
 var LS_NOTIFY='wf.notify';
 var notifyEnabled = localStorage.getItem(LS_NOTIFY)==='1' && ('Notification' in window) && Notification.permission==='granted';
@@ -991,13 +884,6 @@ function rowEl(mr,g){
   }
 
   var acts=el('div','acts');
-  var tracked=isTracked(mr.web_url);
-  var tracking=!!pendingTracks[mr.web_url];
-  var fb=el('button','fav'+(tracked?' on':'')+(tracking?' busy':''), tracking?'…':(tracked?'★':'☆'));
-  fb.title=tracking?'Tracking…':(tracked?'Tracked as a task':'Track as a task');
-  fb.disabled=tracking;
-  fb.addEventListener('click',function(){ if(!tracked) trackMr(mr); });
-  acts.appendChild(fb);
   if(broken(mr) && mr.pipeline){
     var rb=el('button','retry'); rb.title='Retry pipeline'; rb.setAttribute('aria-label','Retry pipeline');
     rb.appendChild(icon(I.retry));
@@ -1166,167 +1052,6 @@ $('#viewGrid').addEventListener('click',function(){ setView('grid'); });
 $('#viewList').setAttribute('aria-pressed', String(viewMode==='list'));
 $('#viewGrid').setAttribute('aria-pressed', String(viewMode==='grid'));
 document.body.classList.toggle('view-grid', viewMode==='grid');
-
-/* ── tab toggle ────────────────────────────────────────── */
-function setTab(t){
-  activeTab=t; localStorage.setItem('wf.tab',t);
-  $('#tabMrs').setAttribute('aria-pressed', String(t==='mrs'));
-  $('#tabTasks').setAttribute('aria-pressed', String(t==='tasks'));
-  $('#mrsPanel').hidden = t!=='mrs';
-  $('#tasksPanel').hidden = t!=='tasks';
-  if(t==='tasks') renderTasks();
-}
-$('#tabMrs').addEventListener('click',function(){ setTab('mrs'); });
-$('#tabTasks').addEventListener('click',function(){ setTab('tasks'); });
-setTab(activeTab);
-
-/* ── tasks tab ─────────────────────────────────────────── */
-var TASK_STEPS=[
-  ['working','Working'],
-  ['in_review','MR review'],['released','Released'],['testing','Verifying'],['done','Done']
-];
-var TASK_STATE_LABEL={paused:'Paused'};
-TASK_STEPS.forEach(function(st){ TASK_STATE_LABEL[st[0]]=st[1]; });
-var showDoneTasks=false;
-
-function taskMrTags(t){
-  var tags=el('span','tags');
-  var s=t.mr_status;
-  if(!s) return tags;
-  var ps=s.pipeline&&s.pipeline.status;
-  if(t.state==='in_review' && s.merged) tags.appendChild(el('span','tag muted','merged, deploying…'));
-  if(t.state==='in_review' && s.merged && (ps==='failed'||ps==='canceled')) tags.appendChild(el('span','tag crit','deploy failed'));
-  if(t.state==='in_review' && !s.merged){
-    if(ps==='failed'||ps==='canceled') tags.appendChild(el('span','tag crit','pipeline failed'));
-    else if(ps==='running'||ps==='pending') tags.appendChild(el('span','tag muted','pipeline running'));
-    else if(ps==='success') tags.appendChild(el('span','tag ok','pipeline passed'));
-    if(s.needs_rebase) tags.appendChild(el('span','tag warn','rebase'));
-    if(s.approved) tags.appendChild(el('span','tag ok','approved'));
-    else if(s.approvals_left) tags.appendChild(el('span','tag muted','awaiting approval'));
-  }
-  return tags;
-}
-
-function taskProgress(t){
-  var at=t.state==='paused' ? (t.paused_from||'working') : t.state;
-  var idx=TASK_STEPS.findIndex(function(st){ return st[0]===at; });
-  return { idx:Math.max(idx,0), pct:Math.round(Math.max(idx,0)/(TASK_STEPS.length-1)*100) };
-}
-
-function taskCard(t){
-  var card=el('div','taskcard');
-  var top=el('div','taskcard-top');
-  top.appendChild(el('span','statebadge '+t.state, TASK_STATE_LABEL[t.state]||t.state));
-  var linkUrl=t.mr_url||t.linear_url;
-  var title;
-  if(linkUrl){ title=el('a','title'); title.href=linkUrl; title.target='_blank'; title.rel='noopener'; title.textContent=t.title; }
-  else title=el('span','title',t.title);
-  top.appendChild(title);
-  var prog=taskProgress(t);
-  top.appendChild(el('span','taskpct',prog.pct+'%'));
-  card.appendChild(top);
-
-  var bar=el('div','taskbar'+(t.state==='paused'?' paused':''));
-  var fill=el('div','taskbar-fill '+(t.state==='paused'?'paused':t.state)); fill.style.width=prog.pct+'%';
-  bar.appendChild(fill);
-  card.appendChild(bar);
-  var steps=el('div','tasksteps');
-  TASK_STEPS.forEach(function(st,i){
-    var b=el('button','taskstep'+(i<prog.idx?' past':'')+(i===prog.idx?' current':''), st[1]);
-    b.title='Move to '+st[1];
-    b.addEventListener('click',function(){ if(t.state!==st[0]) transitionTask(t.id,st[0]); });
-    steps.appendChild(b);
-  });
-  card.appendChild(steps);
-
-  var checks=el('div','taskchecks');
-  [['tested','Local test'],['reviewed','Self-review']].forEach(function(c){
-    var on=!!t[c[0]];
-    var b=el('button','taskcheck'+(on?' on':''),(on?'✓ ':'')+c[1]);
-    b.title=on?'Mark as not done':'Mark as done';
-    b.addEventListener('click',function(){ toggleTaskFlag(t.id,c[0],!on); });
-    checks.appendChild(b);
-  });
-  card.appendChild(checks);
-
-  card.appendChild(taskMrTags(t));
-  if(t.crew){
-    var c=t.crew, crewTags=el('span','tags');
-    crewTags.appendChild(el('span','tag','⚓ crew '+c.done+'/'+c.total));
-    if(c.running) crewTags.appendChild(el('span','tag muted','▶ '+c.running+' running'));
-    if(c.failed) crewTags.appendChild(el('span','tag crit','✖ '+c.failed+' failed'));
-    if(c.blocked) crewTags.appendChild(el('span','tag warn','⏸ waiting: '+c.blocked));
-    card.appendChild(crewTags);
-  }
-  if(pendingTasks[t.id]){ card.classList.add('pending'); card.appendChild(el('div','taskcard-meta saving','Saving…')); }
-  if(taskErrors[t.id]) card.appendChild(el('div','taskcard-error','Failed: '+taskErrors[t.id]));
-  if(t.state==='paused' && t.paused_reason) card.appendChild(el('div','taskcard-meta',t.paused_reason));
-
-  var meta=el('div','taskcard-meta');
-  meta.appendChild(el('span',null,t.repo+' · '+t.branch));
-  if(t.linear_url){ var la=el('a',null,'Linear'); la.href=t.linear_url; la.target='_blank'; la.rel='noopener'; meta.appendChild(la); }
-  if(t.mr_url){ var ma=el('a',null,'MR'); ma.href=t.mr_url; ma.target='_blank'; ma.rel='noopener'; meta.appendChild(ma); }
-  var actions=el('div','taskcard-actions');
-  if(t.state==='paused'){
-    var resume=el('button','secondary','Resume');
-    resume.addEventListener('click',function(){ transitionTask(t.id,t.paused_from||'working'); });
-    actions.appendChild(resume);
-  } else if(t.state!=='done'){
-    var pause=el('button','secondary','Pause');
-    pause.addEventListener('click',function(){
-      actions.textContent='';
-      var input=document.createElement('input'); input.type='text'; input.placeholder='Why paused? (optional)'; input.className='pausereason';
-      var ok=el('button',null,'Pause');
-      var submit=function(){ transitionTask(t.id,'paused',input.value.trim()); };
-      ok.addEventListener('click',submit);
-      input.addEventListener('keydown',function(e){ if(e.key==='Enter') submit(); if(e.key==='Escape') renderTasks(); });
-      actions.appendChild(input); actions.appendChild(ok);
-      input.focus();
-    });
-    actions.appendChild(pause);
-  }
-  var remove=el('button','secondary','Remove');
-  remove.title='Remove this task from the list';
-  remove.addEventListener('click',function(){
-    if(!remove.classList.contains('armed')){
-      remove.classList.add('armed'); remove.textContent='Really remove?';
-      setTimeout(function(){ remove.classList.remove('armed'); remove.textContent='Remove'; },4000);
-      return;
-    }
-    removeTask(t.id);
-  });
-  actions.appendChild(remove);
-  meta.appendChild(actions);
-  card.appendChild(meta);
-  if(pendingTasks[t.id]) card.querySelectorAll('button,input').forEach(function(n){ n.disabled=true; });
-  return card;
-}
-
-function renderTasks(){
-  var panel=$('#tasksPanel'); panel.textContent='';
-  var toggle=el('label','showdone');
-  var cb=document.createElement('input'); cb.type='checkbox'; cb.checked=showDoneTasks;
-  cb.addEventListener('change',function(){ showDoneTasks=cb.checked; renderTasks(); });
-  toggle.appendChild(cb);
-  toggle.appendChild(document.createTextNode('Show done'));
-  panel.appendChild(toggle);
-
-  if(!tasksLoaded){
-    panel.appendChild(el('div','empty','Loading…'));
-    return;
-  }
-  var visible=tasks.filter(function(t){ return showDoneTasks || t.state!=='done'; });
-  if(!visible.length){
-    var e=el('div','empty'); e.appendChild(el('b',null,'No tasks tracked'));
-    e.appendChild(document.createTextNode('Star an MR, or start work with the track-work skill.'));
-    panel.appendChild(e); return;
-  }
-  var order=['working','in_review','released','testing','paused','done'];
-  visible.sort(function(a,b){ return order.indexOf(a.state)-order.indexOf(b.state) || new Date(b.updated_at)-new Date(a.updated_at); });
-  var cards=el('div','taskcards');
-  visible.forEach(function(t){ cards.appendChild(taskCard(t)); });
-  panel.appendChild(cards);
-}
 
 /* ── clocks ────────────────────────────────────────────── */
 setInterval(function(){

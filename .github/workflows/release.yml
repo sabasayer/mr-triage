@@ -32,7 +32,6 @@ jobs:
           cache: npm
 
       - run: npm install
-      - run: npm test
 
       - run: npx semantic-release
         env:
