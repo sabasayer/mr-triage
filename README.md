@@ -1,8 +1,9 @@
 # MR Triage
 
-Local GitLab MR dashboard — replaces manually checking GitLab's MR page.
+Local GitLab and GitHub MR dashboard — replaces manually checking the MR pages.
 
-- `server.mjs` — Node http server, shells out to `glab api` for GitLab data
+- `server.mjs` — Node http server, shells out to `glab api` for GitLab data and `gh api graphql` for GitHub data
+- `github.mjs` — turns GitHub pull request JSON into the MR objects the UI uses
 - `public/` — static UI, polls the server every 15s
 - `SPEC.md` — the v1 spec this implementation follows
 - `.scratch/wayfinder-spec/` — the planning map that produced that spec, built with the `/wayfinder` skill (named for the skill, not the app — the app was renamed from its original "wayfinder" working title to avoid confusion with the skill)
@@ -14,7 +15,13 @@ npx mr-triage   # http://localhost:4931
 ```
 
 No local clone needed — `npx` fetches and caches it on first use. Requires
-`glab` installed and authenticated, and **Node ≥20**.
+**Node ≥20**, and at least one of these, installed and logged in:
+
+- `glab` for GitLab
+- `gh` for GitHub (private repos work with your `gh` login)
+
+Each source is optional. If one is missing or not logged in, the app skips it
+and shows a warning. If both fail, it shows an error.
 
 Config lives in `~/.mr-triage/`, created on first run:
 
@@ -25,6 +32,23 @@ Config lives in `~/.mr-triage/`, created on first run:
   override the group's avatar letter(s) — handy when several repos share a
   prefix (e.g. everything starting with `webapp-`) and the auto-derived initial
   collides.
+
+  To read GitHub repos, use `github:owner/repo`, or an object with
+  `"host": "github"`. Plain strings and objects without `host` mean GitLab.
+
+  ```json
+  [
+    "acme/webapp-widgets",
+    "github:acme/api",
+    { "path": "acme/web", "host": "github", "short": "WB" }
+  ]
+  ```
+
+  GitHub PRs also show up when you wrote them or when your review is
+  requested, even if the repo is not in `repos.json`.
+
+GitHub PRs show a `#` before the number, GitLab MRs show a `!`. GitHub has
+no job list or retry button here. Clicking a check tag opens the checks page.
 
 The old Tasks feature is gone (removed in 2.0.0). A leftover `tasks.json` in
 this folder is no longer read. You can delete it.

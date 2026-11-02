@@ -1,5 +1,6 @@
 export type Mr = {
   iid: number
+  host?: string
   title: string
   source_branch: string
   author: string

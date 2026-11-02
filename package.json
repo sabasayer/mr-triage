@@ -1,7 +1,7 @@
 {
   "name": "mr-triage",
   "version": "2.0.0",
-  "description": "A local GitLab MR dashboard — replaces manually checking GitLab's MR page.",
+  "description": "A local GitLab and GitHub MR/PR dashboard — replaces manually checking the MR pages.",
   "license": "MIT",
   "author": "Salih Sayer",
   "repository": {
@@ -14,6 +14,7 @@
   },
   "keywords": [
     "gitlab",
+    "github",
     "merge-request",
     "dashboard"
   ],
@@ -23,6 +24,7 @@
   },
   "files": [
     "server.mjs",
+    "github.mjs",
     "public"
   ],
   "engines": {
@@ -33,7 +35,8 @@
     "provenance": true
   },
   "scripts": {
-    "start": "node server.mjs"
+    "start": "node server.mjs",
+    "test": "node --test"
   },
   "devDependencies": {
     "@semantic-release/changelog": "^7.0.0",

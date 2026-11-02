@@ -5,6 +5,7 @@ import { readFile, writeFile, mkdir } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { dirname, join, extname } from "node:path";
 import { homedir } from "node:os";
+import { buildQuery, mapPullRequest, prKey } from "./github.mjs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const PORT = process.env.PORT || 4931;
@@ -49,10 +50,45 @@ async function glabApi(path, method = "GET") {
   return out.trim() ? JSON.parse(out) : null;
 }
 
+function ghExec(args, stdin) {
+  return new Promise((resolve, reject) => {
+    const child = execFile("gh", args, { maxBuffer: 1024 * 1024 * 32 }, (err, stdout, stderr) => {
+      if (err) return reject(new Error(err.code === "ENOENT" ? "gh is not installed" : stderr || err.message));
+      resolve(stdout);
+    });
+    if (stdin) child.stdin.end(stdin);
+  });
+}
+
+async function ghGraphql(query) {
+  const out = await ghExec(["api", "graphql", "--input", "-"], JSON.stringify({ query }));
+  const { data, errors } = JSON.parse(out);
+  if (!data) throw new Error(errors?.[0]?.message ?? "empty GraphQL answer");
+  return data;
+}
+
 let me = null;
 async function whoami() {
   if (!me) me = (await glabApi("user")).username;
   return me;
+}
+
+async function checkGitlab() {
+  try {
+    await whoami();
+    return null;
+  } catch (err) {
+    return /ENOENT/.test(err.message) ? "glab is not installed" : err.message.trim();
+  }
+}
+
+async function checkGithub() {
+  try {
+    await ghExec(["api", "user", "--jq", ".login"]);
+    return null;
+  } catch (err) {
+    return err.message.trim();
+  }
 }
 
 // One-time carry-over for anyone already running this from a local clone
@@ -76,12 +112,22 @@ async function migrateLegacyReposFile() {
 }
 
 // ponytail: entries can be a plain path string, or {path, short} when the
-// auto-derived avatar letter collides (e.g. everything starting with "webapp-")
+// auto-derived avatar letter collides (e.g. everything starting with "webapp-").
+// GitHub repos: "github:owner/repo" or {path, host: "github"}. Anything else is GitLab.
+function parseRepoEntry(e) {
+  const entry = typeof e === "string" ? { path: e } : e;
+  const prefixed = entry.path.startsWith("github:");
+  return {
+    path: prefixed ? entry.path.slice("github:".length) : entry.path,
+    short: entry.short ?? null,
+    host: prefixed || entry.host === "github" ? "github" : "gitlab",
+  };
+}
+
 async function myRepos() {
   try {
     const raw = await readFile(REPOS_FILE, "utf8");
-    const entries = JSON.parse(raw);
-    return entries.map((e) => (typeof e === "string" ? { path: e, short: null } : { path: e.path, short: e.short ?? null }));
+    return JSON.parse(raw).map(parseRepoEntry);
   } catch {
     return [];
   }
@@ -155,13 +201,8 @@ async function fetchDetail(mr) {
   };
 }
 
-async function loadMrs() {
-  console.log("[mr-triage] refresh: fetching MR lists…");
-  archivedCache.clear();
+async function loadGitlab(repos) {
   const user = await whoami();
-  const repos = await myRepos();
-
-  const shortByPath = new Map(repos.filter((r) => r.short).map((r) => [r.path, r.short]));
 
   const [authored, reviewing, ...repoResults] = await Promise.all([
     fetchMrList("scope=created_by_me"),
@@ -205,6 +246,70 @@ async function loadMrs() {
     d.relationship = authoredKeys.has(key) ? "authored" : reviewingKeys.has(key) ? "reviewing" : "other";
   }
 
+  return { details, warnings: [...repoErrors, ...detailErrors.map((r) => `${r.mr.web_url}: ${r.error}`)] };
+}
+
+// ponytail: same idea as lastApproved above, for GitHub PRs
+const lastApprovedGithub = new Map();
+
+async function loadGithub(repos) {
+  const data = await ghGraphql(buildQuery(repos.map((r) => r.path)));
+  const nodes = (alias) => data[alias].nodes.filter((pr) => pr?.number);
+
+  const authoredKeys = new Set(nodes("authored").map(prKey));
+  const reviewingKeys = new Set(nodes("reviewing").map(prKey));
+
+  const byKey = new Map();
+  for (const pr of [...nodes("authored"), ...nodes("reviewing"), ...repos.flatMap((_, i) => nodes(`repo${i}`))]) {
+    byKey.set(prKey(pr), pr);
+  }
+  console.log(`[mr-triage] refresh: ${byKey.size} GitHub PR(s) across ${repos.length} configured repo(s)`);
+
+  const details = [...byKey.entries()].map(([key, pr]) => {
+    const d = mapPullRequest(pr, {
+      wasApproved: lastApprovedGithub.get(key) === true,
+      relationship: authoredKeys.has(key) ? "authored" : reviewingKeys.has(key) ? "reviewing" : "other",
+    });
+    lastApprovedGithub.set(key, d.approved);
+    return d;
+  });
+  return { details, warnings: [] };
+}
+
+async function loadMrs() {
+  console.log("[mr-triage] refresh: fetching MR lists…");
+  archivedCache.clear();
+  const repos = await myRepos();
+  const repoPaths = (host) => repos.filter((r) => r.host === host);
+
+  const [gitlabError, githubError] = await Promise.all([checkGitlab(), checkGithub()]);
+  if (gitlabError && githubError) {
+    throw new Error(`Neither source works. GitLab (glab): ${gitlabError} GitHub (gh): ${githubError}`);
+  }
+
+  const warnings = [];
+  const details = [];
+  const sources = [
+    [gitlabError, "GitLab (glab)", () => loadGitlab(repoPaths("gitlab"))],
+    [githubError, "GitHub (gh)", () => loadGithub(repoPaths("github"))],
+  ];
+  for (const [error, label, load] of sources) {
+    if (error) {
+      warnings.push(`${label} skipped: ${error}`);
+      continue;
+    }
+    try {
+      const result = await load();
+      details.push(...result.details);
+      warnings.push(...result.warnings);
+    } catch (err) {
+      console.error(`[mr-triage] ${label} failed:`, err);
+      warnings.push(`${label} failed: ${err.message.trim()}`);
+    }
+  }
+
+  const shortByPath = new Map(repos.filter((r) => r.short).map((r) => [r.path, r.short]));
+
   const groups = new Map();
   for (const d of details) {
     if (!groups.has(d.project)) groups.set(d.project, []);
@@ -219,7 +324,7 @@ async function loadMrs() {
     .sort((a, b) => Number(b.mrs.some((m) => m.urgent)) - Number(a.mrs.some((m) => m.urgent)) || a.project.localeCompare(b.project));
 
   console.log(`[mr-triage] refresh done: ${sortedGroups.length} group(s), ${details.length} MR(s) shown`);
-  return { groups: sortedGroups, warnings: [...repoErrors, ...detailErrors.map((r) => `${r.mr.web_url}: ${r.error}`)] };
+  return { groups: sortedGroups, warnings };
 }
 
 // ponytail: single shared cache refreshed on a timer, all clients just poll it — no per-client state

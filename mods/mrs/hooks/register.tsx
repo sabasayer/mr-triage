@@ -120,7 +120,7 @@ export const register: Register = (on, options) => {
                   <Text wrap="truncate-end" dimColor={mr.draft}>
                     <Text color={pipeline.color}>{pipeline.icon}</Text>
                     {mr.has_conflicts ? <Text color="yellow"> ⚠</Text> : ' '}
-                    {mr.approved ? <Text color="green">✔</Text> : ' '} <Text bold>!{mr.iid}</Text>
+                    {mr.approved ? <Text color="green">✔</Text> : ' '} <Text bold>{mr.host === 'github' ? '#' : '!'}{mr.iid}</Text>
                     {linearId(mr.title, mr.source_branch) && <Text color="magenta"> {linearId(mr.title, mr.source_branch)}</Text>} <Text dimColor>{shortTitle(mr.title)}</Text>
                   </Text>
                 )

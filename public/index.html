@@ -600,13 +600,13 @@ function bulletList(lines){
         if(cb.checked) checkedUrls.add(mr.web_url); else checkedUrls.delete(mr.web_url);
       });
       label.appendChild(cb);
-      label.appendChild(el('span',null,mr.repo+' '+(mr.iid?'!'+mr.iid+' ':'')+mr.title));
+      label.appendChild(el('span',null,mr.repo+' '+(mr.iid?mrRef(mr)+' ':'')+mr.title));
       panel.appendChild(label);
     });
     var copyBtn=el('button','copyBtn','Copy selected');
     copyBtn.addEventListener('click',function(){
       var text=bulletList(mrs.filter(function(mr){ return checkedUrls.has(mr.web_url); })
-        .map(function(mr){ return mr.repo+' '+(mr.iid?'!'+mr.iid+' ':'')+mr.title+' — '+mr.web_url; }));
+        .map(function(mr){ return mr.repo+' '+(mr.iid?mrRef(mr)+' ':'')+mr.title+' — '+mr.web_url; }));
       copyText(text,copyBtn);
     });
     panel.appendChild(copyBtn);
@@ -640,6 +640,7 @@ function level(mr){
   if(mr.needs_rebase||mr.needs_re_review||mr.urgent) return 'warn';
   return 'ok';
 }
+function mrRef(mr){ return (mr.host==='github'?'#':'!')+mr.iid; }
 function short(p){ var i=p.lastIndexOf('/'); return i<0?{pre:'',last:p}:{pre:p.slice(0,i+1),last:p.slice(i+1)}; }
 // ponytail: deterministic color per group label, so the same repo/author
 // always gets the same avatar hue across renders/reloads — no config, no lookup table
@@ -834,7 +835,7 @@ function rowEl(mr,g){
   var main=el('div','main');
   if(mr.draft) main.appendChild(el('span','tag draft','draft'));
   var a=el('a','title'); a.href=mr.web_url; a.target='_blank'; a.rel='noopener';
-  if(mr.iid) a.appendChild(el('span','mr-iid','!'+mr.iid+' '));
+  if(mr.iid) a.appendChild(el('span','mr-iid',mrRef(mr)+' '));
   var lin=linearId(mr);
   if(lin) a.appendChild(el('span','mr-linear',lin+' '));
   a.appendChild(document.createTextNode(mr.title));
@@ -845,14 +846,14 @@ function rowEl(mr,g){
   var ps=pstat(mr);
   if(ps==='failed'||ps==='canceled'){
     var pipeBtn=el('button','tag crit',ps==='failed'?'pipeline failed':'pipeline canceled');
-    pipeBtn.title='Show failed jobs';
-    pipeBtn.addEventListener('click',function(e){ e.stopPropagation(); toggleJobsPopover(mr,pipeBtn,'failed'); });
+    pipeBtn.title=mr.host==='github'?'Open checks':'Show failed jobs';
+    pipeBtn.addEventListener('click',function(e){ e.stopPropagation(); if(mr.host==='github') window.open(mr.pipeline.web_url,'_blank','noopener'); else toggleJobsPopover(mr,pipeBtn,'failed'); });
     tags.appendChild(pipeBtn);
   }
   else if(ps==='running'||ps==='pending'){
     var pr=el('button','pipe run'); pr.appendChild(el('i','dot')); pr.appendChild(el('span',null,ps));
-    pr.title='Show running jobs';
-    pr.addEventListener('click',function(e){ e.stopPropagation(); toggleJobsPopover(mr,pr,'running'); });
+    pr.title=mr.host==='github'?'Open checks':'Show running jobs';
+    pr.addEventListener('click',function(e){ e.stopPropagation(); if(mr.host==='github') window.open(mr.pipeline.web_url,'_blank','noopener'); else toggleJobsPopover(mr,pr,'running'); });
     tags.appendChild(pr);
   }
   else if(ps==='success'){ var po=el('span','pipe ok'); po.title='pipeline passed'; po.appendChild(el('i','dot')); tags.appendChild(po); }
@@ -884,7 +885,7 @@ function rowEl(mr,g){
   }
 
   var acts=el('div','acts');
-  if(broken(mr) && mr.pipeline){
+  if(broken(mr) && mr.pipeline && mr.host!=='github'){
     var rb=el('button','retry'); rb.title='Retry pipeline'; rb.setAttribute('aria-label','Retry pipeline');
     rb.appendChild(icon(I.retry));
     rb.addEventListener('click',function(){ retry(mr,rb); });
