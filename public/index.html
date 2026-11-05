@@ -4,6 +4,13 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>MR Triage</title>
+<script>
+(function(){
+  var forced=new URLSearchParams(location.search).get('theme'), os=matchMedia('(prefers-color-scheme: dark)');
+  function set(){ document.documentElement.dataset.theme = forced==='light'||forced==='dark' ? forced : os.matches?'dark':'light'; }
+  set(); os.addEventListener('change',set);
+})();
+</script>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 16 16%22><text y=%2213%22 font-size=%2214%22>🚦</text></svg>">
 <style>
 :root{
@@ -20,18 +27,16 @@
   --chip:#EEF1F7; --hover:#F0F3F9;
   --shadow:0 1px 2px rgba(28,36,54,.06), 0 1px 0 rgba(28,36,54,.03);
 }
-@media (prefers-color-scheme: dark){
-  :root{
-    --bg:#0E121B; --panel:#161C29; --panel-2:#131926;
-    --line:#242D40; --line-strong:#32405C;
-    --text:#E8EBF0; --text-dim:#98A5BF; --text-faint:#6C7A96;
-    --crit:#FF7078; --crit-bg:rgba(252,89,99,.13); --crit-line:rgba(252,89,99,.5);
-    --warn:#F0C43D; --warn-bg:rgba(252,207,41,.11); --warn-line:rgba(252,207,41,.42);
-    --ok:#2ED8A0;
-    --accent:#8496FF; --accent-soft:rgba(122,140,232,.16);
-    --chip:#1E2637; --hover:#1C2434;
-    --shadow:none;
-  }
+:root[data-theme="dark"]{
+  --bg:#0E121B; --panel:#161C29; --panel-2:#131926;
+  --line:#242D40; --line-strong:#32405C;
+  --text:#E8EBF0; --text-dim:#98A5BF; --text-faint:#6C7A96;
+  --crit:#FF7078; --crit-bg:rgba(252,89,99,.13); --crit-line:rgba(252,89,99,.5);
+  --warn:#F0C43D; --warn-bg:rgba(252,207,41,.11); --warn-line:rgba(252,207,41,.42);
+  --ok:#2ED8A0;
+  --accent:#8496FF; --accent-soft:rgba(122,140,232,.16);
+  --chip:#1E2637; --hover:#1C2434;
+  --shadow:none;
 }
 *{box-sizing:border-box}
 html,body{margin:0;padding:0}
@@ -79,7 +84,7 @@ button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
 }
 .seg button:hover{color:var(--text)}
 .seg button[aria-pressed="true"]{background:var(--panel);color:var(--text);box-shadow:var(--shadow);font-weight:650}
-@media (prefers-color-scheme: dark){ .seg button[aria-pressed="true"]{background:#2A344A} }
+:root[data-theme="dark"] .seg button[aria-pressed="true"]{background:#2A344A}
 
 .bell{padding:3px 9px;border-radius:7px;border:1px solid var(--line);background:var(--chip);font-size:13px;color:var(--text-dim);line-height:1.4;opacity:.55}
 .bell[aria-pressed="true"]{background:var(--accent-soft);color:var(--accent);border-color:var(--accent);opacity:1}
@@ -453,8 +458,14 @@ function linearId(mr){
   var m=(mr.title||'').match(/\b([A-Z]{2,}-\d+)\b/) || (mr.source_branch||'').match(/^([a-z]{2,}-\d+)-/i);
   return m ? m[1].toUpperCase() : null;
 }
+var query=new URLSearchParams(location.search).get('q');
+function clearQuery(){
+  query=null;
+  var u=new URL(location.href); u.searchParams.delete('q'); history.replaceState(null,'',u);
+  render();
+}
 function visible(mr){
-  return !hiddenAuthors.has(mr.author) && (!hasBothSources() || source==='all' || sourceOf(mr)===source);
+  return (!query || mr.key===query) && !hiddenAuthors.has(mr.author) && (!hasBothSources() || source==='all' || sourceOf(mr)===source);
 }
 
 var data=null, fetchedAt=null, fetchError=null, demo=false, tickTimer=null;
@@ -744,7 +755,7 @@ function buildGroups(){
       if(favorites.has(g.project)) return;
       g.mrs.forEach(function(mr){
         var a=mr.author||'unknown';
-        if(hiddenAuthors.has(a)) return;
+        if(!visible(mr)) return;
         (by[a]=by[a]||[]).push(Object.assign({},mr,{_project:g.project}));
       });
     });
@@ -960,9 +971,8 @@ function renderStatus(){
 
 function renderHidden(){
   var box=$('#hiddenBar'); box.textContent='';
-  if(!hiddenAuthors.size && !hiddenRepos.size) return;
+  if(!query && !hiddenAuthors.size && !hiddenRepos.size) return;
   var d=el('div','hiddenbar');
-  d.appendChild(document.createTextNode('Hidden:'));
   function chip(text,title,onClick){
     var c=el('span','hidechip'); c.appendChild(document.createTextNode(text));
     var x=el('button',null,'✕'); x.title=title;
@@ -970,6 +980,8 @@ function renderHidden(){
     c.appendChild(x);
     d.appendChild(c);
   }
+  if(query){ d.appendChild(document.createTextNode('Only:')); chip(query,'Show all MRs',clearQuery); }
+  if(hiddenAuthors.size || hiddenRepos.size) d.appendChild(document.createTextNode('Hidden:'));
   Array.from(hiddenAuthors).sort().forEach(function(a){ chip(a,'Unhide '+a,function(){ toggleHiddenAuthor(a); }); });
   Array.from(hiddenRepos).sort().forEach(function(k){
     var name=k.replace(/^gitlab:/,'');

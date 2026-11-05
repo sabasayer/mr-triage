@@ -6,7 +6,7 @@ import { fileURLToPath } from "node:url";
 import { dirname, join, extname } from "node:path";
 import { homedir } from "node:os";
 import { buildQuery, mapPullRequest, prKey } from "./github.mjs";
-import { repoKey, groupByRepo, isStringList } from "./view.mjs";
+import { repoKey, groupByRepo, isStringList, mrKey, consoleFeed } from "./view.mjs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const PORT = process.env.PORT || 4931;
@@ -316,6 +316,7 @@ async function loadMrs() {
 
   const sortedGroups = groupByRepo(details)
     .map(({ host, project, mrs }) => ({ host, project, short: shortByRepo.get(repoKey(host, project)) ?? null, mrs: mrs.sort(byUrgencyThenRecency) }))
+    .map((g) => ({ ...g, mrs: g.mrs.map((mr) => ({ ...mr, key: mrKey(g, mr) })) }))
     .sort((a, b) => Number(b.mrs.some((m) => m.urgent)) - Number(a.mrs.some((m) => m.urgent)) || a.project.localeCompare(b.project));
 
   console.log(`[mr-triage] refresh done: ${sortedGroups.length} group(s), ${details.length} MR(s) shown`);
@@ -323,11 +324,12 @@ async function loadMrs() {
 }
 
 // ponytail: single shared cache refreshed on a timer, all clients just poll it — no per-client state
-let cache = { groups: [], warnings: [], fetchedAt: null, error: null };
+let cache = { groups: [], warnings: [], fetchedAt: null, dataAt: null, error: null };
 async function refresh() {
   try {
     const { groups, warnings } = await loadMrs();
-    cache = { groups, warnings, fetchedAt: new Date().toISOString(), error: null };
+    const now = new Date().toISOString();
+    cache = { groups, warnings, fetchedAt: now, dataAt: now, error: null };
   } catch (err) {
     console.error("[mr-triage] refresh failed:", err);
     cache = { ...cache, error: err.message, fetchedAt: new Date().toISOString() };
@@ -372,6 +374,17 @@ const server = createServer(async (req, res) => {
   if (url.pathname === "/api/mrs") {
     res.writeHead(200, { "Content-Type": "application/json" });
     res.end(JSON.stringify(cache));
+    return;
+  }
+
+  if (url.pathname === "/console.json") {
+    if (!cache.dataAt) {
+      res.writeHead(503, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ error: cache.error ?? "first refresh still running" }));
+      return;
+    }
+    res.writeHead(200, { "Content-Type": "application/json" });
+    res.end(JSON.stringify(consoleFeed(cache, `http://127.0.0.1:${PORT}`)));
     return;
   }
 

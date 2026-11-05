@@ -61,6 +61,20 @@ Two view settings sit in the dashboard:
   `~/.mr-triage/hidden-repos.json`, next to `hidden-authors.json`. A GitLab and
   a GitHub repo with the same path are hidden separately.
 
+Two URL parameters change the page for one load:
+
+- `?q=VW!575` shows only that MR. The key is the repo short (or the last part
+  of the repo path), then `!` and the number. GitHub uses `#`. A chip under the
+  header clears it.
+- `?theme=light` or `?theme=dark` sets the theme. Without it, the page follows
+  the OS.
+
+## Console feed
+
+`GET /console.json` gives one panel for a local console dashboard: "To review",
+"Mine" and "Team", and a tile with the MRs that need you. It reads only the
+last refresh, so it answers fast. Bot MRs only show as a count in the footer.
+
 The old Tasks feature is gone (removed in 2.0.0). A leftover `tasks.json` in
 this folder is no longer read. You can delete it.
 
