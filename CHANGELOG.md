@@ -1,3 +1,10 @@
+# [2.2.0](https://github.com/sabasayer/mr-triage/compare/v2.1.0...v2.2.0) (2026-11-05)
+
+
+### Features
+
+* serve a console feed and open on one MR ([1f922ca](https://github.com/sabasayer/mr-triage/commit/1f922ca71f7821d46da5bdc9f5eb8c001ed348b4))
+
 # [2.1.0](https://github.com/sabasayer/mr-triage/compare/v2.0.0...v2.1.0) (2026-11-02)
 
 
