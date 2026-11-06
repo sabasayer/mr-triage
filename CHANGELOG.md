@@ -1,3 +1,10 @@
+## [2.2.1](https://github.com/sabasayer/mr-triage/compare/v2.2.0...v2.2.1) (2026-11-06)
+
+
+### Bug Fixes
+
+* apply hidden authors and repos to console feed ([ec32617](https://github.com/sabasayer/mr-triage/commit/ec326175189fff724a2dfca749fcb0e572a20369))
+
 # [2.2.0](https://github.com/sabasayer/mr-triage/compare/v2.1.0...v2.2.0) (2026-11-05)
 
 
