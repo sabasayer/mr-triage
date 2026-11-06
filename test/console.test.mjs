@@ -65,3 +65,29 @@ test("tile level is soon with only reviews, calm with neither", () => {
   assert.equal(calm.footer, undefined);
   assert.deepEqual(calm.groups.map((g) => g.title), ["Mine"]);
 });
+
+test("hidden authors and hidden repos are left out of items, tile and footer", () => {
+  const two = {
+    dataAt: "2026-11-05T09:00:00Z",
+    groups: [
+      { host: "gitlab", project: "acme/viewer", short: "VW", mrs: [
+        mr({ iid: 1, relationship: "reviewing", author: "ann" }),
+        mr({ iid: 2, relationship: "reviewing", author: "group_9_bot_xyz" }),
+        mr({ iid: 3, relationship: "authored", urgent: true }),
+      ] },
+      { host: "gitlab", project: "acme/noisy", short: "NZ", mrs: [
+        mr({ iid: 4, relationship: "reviewing", author: "ann" }),
+        mr({ iid: 5, relationship: "other", author: "bob" }),
+      ] },
+    ],
+  };
+  const feed = consoleFeed(two, "http://h", { authors: ["group_9_bot_xyz"], repos: ["gitlab:acme/noisy"] });
+  const keys = feed.groups.flatMap((g) => g.items.map((i) => i.key));
+  assert.deepEqual(keys.sort(), ["VW!1", "VW!3"]);
+  assert.equal(feed.tile.value, 2);
+  assert.equal(feed.tile.detail, "1 mine · 1 to review · 0 team");
+  assert.equal(feed.footer, undefined);
+
+  const unhidden = consoleFeed(two, "http://h");
+  assert.equal(unhidden.groups.flatMap((g) => g.items).length, 4);
+});

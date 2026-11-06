@@ -30,8 +30,13 @@ function marks(mr) {
   return blockers;
 }
 
-export function consoleFeed(cache, origin) {
-  const all = cache.groups.flatMap((g) => g.mrs.map((mr) => ({ ...mr, key: mrKey(g, mr) })));
+export function consoleFeed(cache, origin, hidden = {}) {
+  const hiddenAuthors = new Set(hidden.authors);
+  const hiddenRepos = new Set(hidden.repos);
+  const all = cache.groups
+    .filter((g) => !hiddenRepos.has(repoKey(g.host, g.project)))
+    .flatMap((g) => g.mrs.map((mr) => ({ ...mr, key: mrKey(g, mr) })))
+    .filter((mr) => !hiddenAuthors.has(mr.author));
   const mrs = all.filter((mr) => !isBot(mr)).sort((a, b) => new Date(b.updated_at) - new Date(a.updated_at));
   const item = (mr, level) => ({
     key: mr.key,

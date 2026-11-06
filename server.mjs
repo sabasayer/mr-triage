@@ -384,7 +384,8 @@ const server = createServer(async (req, res) => {
       return;
     }
     res.writeHead(200, { "Content-Type": "application/json" });
-    res.end(JSON.stringify(consoleFeed(cache, `http://127.0.0.1:${PORT}`)));
+    const hidden = { authors: await loadStringList(HIDDEN_FILE), repos: await loadStringList(HIDDEN_REPOS_FILE) };
+    res.end(JSON.stringify(consoleFeed(cache, `http://127.0.0.1:${PORT}`, hidden)));
     return;
   }
 
