@@ -91,3 +91,52 @@ test("hidden authors and hidden repos are left out of items, tile and footer", (
   const unhidden = consoleFeed(two, "http://h");
   assert.equal(unhidden.groups.flatMap((g) => g.items).length, 4);
 });
+
+test("priority follows the console rubric bands", () => {
+  const feed = consoleFeed(cache([
+    mr({ iid: 1, relationship: "reviewing", author: "ann" }),
+    mr({ iid: 2, relationship: "authored", urgent: true, pipeline: { status: "failed" } }),
+    mr({ iid: 3, relationship: "authored" }),
+    mr({ iid: 4, author: "bob" }),
+    mr({ iid: 5, relationship: "authored", has_unresolved_threads: true }),
+    mr({ iid: 6, relationship: "authored", draft: true }),
+    mr({ iid: 7, author: "bob", draft: true }),
+  ]), "http://h");
+  const byKey = Object.fromEntries(feed.groups.flatMap((g) => g.items).map((i) => [i.key, i]));
+  const within = (key, min, max) =>
+    assert.ok(byKey[key].priority >= min && byKey[key].priority <= max, `${key} scored ${byKey[key].priority}`);
+  within("VW!1", 70, 89);
+  within("VW!5", 70, 89);
+  within("VW!2", 50, 69);
+  within("VW!3", 30, 49);
+  within("VW!4", 0, 29);
+  within("VW!6", 0, 29);
+  within("VW!7", 0, 29);
+  assert.equal(byKey["VW!1"].level, "soon");
+});
+
+test("an older MR in the same band scores higher, and stays in its band", () => {
+  const feed = consoleFeed(cache([
+    mr({ iid: 1, relationship: "reviewing", updated_at: "2026-11-05T08:00:00Z" }),
+    mr({ iid: 2, relationship: "reviewing", updated_at: "2026-11-03T08:00:00Z" }),
+    mr({ iid: 3, relationship: "reviewing", updated_at: "2025-01-01T08:00:00Z" }),
+  ]), "http://h");
+  const score = Object.fromEntries(feed.groups[0].items.map((i) => [i.key, i.priority]));
+  assert.ok(score["VW!2"] > score["VW!1"]);
+  assert.ok(score["VW!3"] > score["VW!2"]);
+  assert.ok(score["VW!3"] <= 89);
+});
+
+test("next step follows the MR state", () => {
+  const feed = consoleFeed(cache([
+    mr({ iid: 1, relationship: "reviewing", author: "ann" }),
+    mr({ iid: 2, relationship: "authored", pipeline: { status: "failed" }, urgent: true }),
+    mr({ iid: 3, relationship: "authored", has_reviewer: false }),
+    mr({ iid: 4, author: "bob" }),
+  ]), "http://h");
+  const next = Object.fromEntries(feed.groups.flatMap((g) => g.items).map((i) => [i.key, i.next]));
+  assert.equal(next["VW!1"], "Review the MR");
+  assert.equal(next["VW!2"], "Fix the failed pipeline");
+  assert.equal(next["VW!3"], "Assign a reviewer");
+  assert.equal(next["VW!4"], undefined);
+});

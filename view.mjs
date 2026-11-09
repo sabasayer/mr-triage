@@ -30,6 +30,30 @@ function marks(mr) {
   return blockers;
 }
 
+const BAND_SPAN = 19;
+const HOURS_PER_POINT = 6;
+
+function band(mr) {
+  if (mr.relationship === "reviewing") return { base: 70, next: "Review the MR" };
+  if (mr.relationship === "other") return { base: mr.draft ? 0 : 10 };
+  if (mr.has_unresolved_threads) return { base: 70, next: "Answer the open threads" };
+  if (mr.draft) return { base: 10 };
+  if (mr.pipeline?.status === "failed") return { base: 50, next: "Fix the failed pipeline" };
+  if (mr.has_conflicts) return { base: 50, next: "Resolve the conflicts" };
+  if (mr.needs_rebase) return { base: 50, next: "Rebase the branch" };
+  if (mr.needs_re_review) return { base: 50, next: "Ask for a new review" };
+  if (mr.approved) return { base: 30, next: "Merge the MR" };
+  if (!mr.has_reviewer) return { base: 30, next: "Assign a reviewer" };
+  return { base: 30, next: "Ask the reviewer to approve" };
+}
+
+function score(mr, now) {
+  const { base, next } = band(mr);
+  const idleHours = Math.max(0, (now - new Date(mr.updated_at)) / 36e5);
+  const age = Math.min(BAND_SPAN, Math.floor(idleHours / HOURS_PER_POINT));
+  return { priority: base + age, ...(next && { next }) };
+}
+
 export function consoleFeed(cache, origin, hidden = {}) {
   const hiddenAuthors = new Set(hidden.authors);
   const hiddenRepos = new Set(hidden.repos);
@@ -38,10 +62,12 @@ export function consoleFeed(cache, origin, hidden = {}) {
     .flatMap((g) => g.mrs.map((mr) => ({ ...mr, key: mrKey(g, mr) })))
     .filter((mr) => !hiddenAuthors.has(mr.author));
   const mrs = all.filter((mr) => !isBot(mr)).sort((a, b) => new Date(b.updated_at) - new Date(a.updated_at));
+  const now = new Date(cache.dataAt);
   const item = (mr, level) => ({
     key: mr.key,
     title: mr.title,
     detail: mr.relationship === "authored" ? mr.key : `${mr.key} · ${mr.author}`,
+    ...score(mr, now),
     level,
     since: mr.updated_at,
     icon: PIPELINE_ICON[mr.pipeline?.status] ?? "idle",
