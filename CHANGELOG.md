@@ -1,3 +1,10 @@
+# [2.4.0](https://github.com/sabasayer/mr-triage/compare/v2.3.1...v2.4.0) (2026-11-09)
+
+
+### Features
+
+* add priority and next to console feed items ([e08a3f0](https://github.com/sabasayer/mr-triage/commit/e08a3f0d620eab710f73271c3caf123c090a2787))
+
 ## [2.3.1](https://github.com/sabasayer/mr-triage/compare/v2.3.0...v2.3.1) (2026-11-09)
 
 
