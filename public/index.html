@@ -1012,6 +1012,14 @@ var jobsPopoverEl=null, jobsPopoverFor=null;
 function closeJobsPopover(){ if(jobsPopoverEl) jobsPopoverEl.remove(); jobsPopoverEl=null; jobsPopoverFor=null; }
 document.addEventListener('click',function(e){ if(jobsPopoverEl && !jobsPopoverEl.contains(e.target)) closeJobsPopover(); });
 document.addEventListener('keydown',function(e){ if(e.key==='Escape') closeJobsPopover(); });
+if(window.parent!==window) window.addEventListener('keydown',function(e){
+  var tag=document.activeElement&&document.activeElement.tagName;
+  var sw=e.altKey&&!e.metaKey&&!e.ctrlKey&&(/^Digit[1-9]$/.test(e.code)||e.key==='ArrowLeft'||e.key==='ArrowRight');
+  var esc=e.key==='Escape'&&!jobsPopoverEl&&!/^(INPUT|TEXTAREA|SELECT)$/.test(tag);
+  if(!sw&&!esc) return;
+  if(sw){ e.preventDefault(); e.stopImmediatePropagation(); }
+  window.parent.postMessage({type:'console-key',key:e.key,code:e.code,altKey:e.altKey},'*');
+},true);
 
 function toggleJobsPopover(mr,anchor,kind){
   if(jobsPopoverFor===anchor){ closeJobsPopover(); return; }
