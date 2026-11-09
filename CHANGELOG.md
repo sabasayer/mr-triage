@@ -1,3 +1,10 @@
+## [2.3.1](https://github.com/sabasayer/mr-triage/compare/v2.3.0...v2.3.1) (2026-11-09)
+
+
+### Bug Fixes
+
+* widen the approval and jobs popovers ([ce44115](https://github.com/sabasayer/mr-triage/commit/ce44115c690953a76f367569358db8a0ef2ca84d))
+
 # [2.3.0](https://github.com/sabasayer/mr-triage/compare/v2.2.1...v2.3.0) (2026-11-09)
 
 
