@@ -1,3 +1,15 @@
+# [2.3.0](https://github.com/sabasayer/mr-triage/compare/v2.2.1...v2.3.0) (2026-11-09)
+
+
+### Bug Fixes
+
+* keep popovers inside the window ([f598efc](https://github.com/sabasayer/mr-triage/commit/f598efc5e6b3d40eeb1fe5e875580b9dcdd458cf))
+
+
+### Features
+
+* pass Esc and tool-switch keys to the console when embedded ([fe1ba80](https://github.com/sabasayer/mr-triage/commit/fe1ba809fb58c8bcc73b84e3070a90168c790fed))
+
 ## [2.2.1](https://github.com/sabasayer/mr-triage/compare/v2.2.0...v2.2.1) (2026-11-06)
 
 
