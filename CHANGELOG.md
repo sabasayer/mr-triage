@@ -1,3 +1,10 @@
+## [2.4.1](https://github.com/sabasayer/mr-triage/compare/v2.4.0...v2.4.1) (2026-11-17)
+
+
+### Bug Fixes
+
+* place popovers outside the blurred header ([#28](https://github.com/sabasayer/mr-triage/issues/28)) ([465a7d3](https://github.com/sabasayer/mr-triage/commit/465a7d3c111cf18a69e1c6dbe7f997fd922f7a1d))
+
 # [2.4.0](https://github.com/sabasayer/mr-triage/compare/v2.3.1...v2.4.0) (2026-11-09)
 
 
