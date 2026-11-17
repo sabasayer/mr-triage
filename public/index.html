@@ -595,6 +595,7 @@ $('#notifyBtn').addEventListener('click',function(){
 updateNotifyBtn();
 
 /* ── notification settings panel ──────────────────────── */
+document.body.append($('#notifyPanel'),$('#waitingPanel'));
 (function(){
   var panel=$('#notifyPanel');
   var h=el('h4',null,'Notify me when');
