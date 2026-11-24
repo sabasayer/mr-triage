@@ -1,3 +1,10 @@
+## [2.4.2](https://github.com/sabasayer/mr-triage/compare/v2.4.1...v2.4.2) (2026-11-24)
+
+
+### Bug Fixes
+
+* ?q= highlights the MR instead of hiding the rest ([#29](https://github.com/sabasayer/mr-triage/issues/29)) ([b200781](https://github.com/sabasayer/mr-triage/commit/b20078172f282a64efe05ab0bc18dee75a956214))
+
 ## [2.4.1](https://github.com/sabasayer/mr-triage/compare/v2.4.0...v2.4.1) (2026-11-17)
 
 
