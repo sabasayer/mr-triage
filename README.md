@@ -63,9 +63,9 @@ Two view settings sit in the dashboard:
 
 Two URL parameters change the page for one load:
 
-- `?q=VW!575` shows only that MR. The key is the repo short (or the last part
-  of the repo path), then `!` and the number. GitHub uses `#`. A chip under the
-  header clears it.
+- `?q=VW!575` scrolls to that MR and highlights it. All other MRs stay
+  visible. The key is the repo short (or the last part of the repo path), then
+  `!` and the number. GitHub uses `#`.
 - `?theme=light` or `?theme=dark` sets the theme. Without it, the page follows
   the OS.
 
